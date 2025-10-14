@@ -1,0 +1,24 @@
+# Archivos de caché y compilados de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Entornos virtuales
+/venv/
+/envs/
+.env
+.venv
+
+# Archivos de configuración de IDEs y editores
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Archivos de Jupyter Notebook
+.ipynb_checkpoints
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
