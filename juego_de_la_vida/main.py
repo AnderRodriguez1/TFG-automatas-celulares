@@ -1,16 +1,17 @@
 import sys
 import random
 from PySide6 import QtWidgets, QtCore, QtGui
+import numpy as np
 
 GRID_WIDTH = 50
 GRID_HEIGHT = 50
 BASE_CELL_SIZE = 15
-
+#TODO: hacer que quizas se use la gpu para renderizar?
 class GridWidget(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
 
-        self.grid_state = []
+        self.grid_state = None
         self.init_grid()
 
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
@@ -29,7 +30,7 @@ class GridWidget(QtWidgets.QWidget):
         Inicializa las cuadriculas en un estado aleatorio
         """
 
-        self.grid_state = [[random.choice([0, 1]) for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
+        self.grid_state = np.random.choice([0, 1], size=(GRID_HEIGHT, GRID_WIDTH))
 
     def resizeEvent(self, event):
         """
@@ -101,7 +102,7 @@ class GridWidget(QtWidgets.QWidget):
             grid_y = int(grid_pos.y())
 
             if 0 <= grid_x < GRID_WIDTH and 0 <= grid_y < GRID_HEIGHT:
-                self.grid_state[grid_y][grid_x] = 1 - self.grid_state[grid_y][grid_x]
+                self.grid_state[grid_y, grid_x] = 1 - self.grid_state[grid_y, grid_x]
                 self.update()
                 event.accept()
         elif event.button() == QtCore.Qt.MiddleButton or event.button() == QtCore.Qt.RightButton:
@@ -191,8 +192,6 @@ class GridWidget(QtWidgets.QWidget):
 
         return QtCore.QPointF(grid_x, grid_y)
                 
-
-    
     def next_generation(self):
         """
         Placeholder para la logica de actualizadon de la cuadricula
