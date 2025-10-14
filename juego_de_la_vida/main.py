@@ -2,8 +2,9 @@ import sys
 import random
 from PySide6 import QtWidgets, QtCore, QtGui
 
-GRID_WIDTH = 40
-GRID_HEIGHT = 30
+GRID_WIDTH = 50
+GRID_HEIGHT = 50
+BASE_CELL_SIZE = 15
 
 class GridWidget(QtWidgets.QWidget):
     def __init__(self):
@@ -14,9 +15,14 @@ class GridWidget(QtWidgets.QWidget):
 
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
 
-        self.cell_size = 0
-        self.offset_x = 0
-        self.offset_y = 0
+        self.zoom_level = 1.0
+        self.view_offset_x = 0.0
+        self.view_offset_y = 0.0
+
+        self.panning = False
+        self.last_pan_pos = QtCore.QPoint()
+
+        self._initial_fit_done = False
 
     def init_grid(self):
         """
@@ -26,8 +32,99 @@ class GridWidget(QtWidgets.QWidget):
         self.grid_state = [[random.choice([0, 1]) for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
 
     def resizeEvent(self, event):
-        self.recalculate_geometry()
-        return super().resizeEvent(event)
+        """
+        LLamado cuando se cambia el tamaño
+        """
+
+        if not self._initial_fit_done and self.width() > 1 and self.height() > 1:
+            self.fit_grid_to_window()
+            self._initial_fit_done = True
+        
+        super().resizeEvent(event)
+
+    def fit_grid_to_window(self):
+        """
+        Ajusta el zoom y el offset para que la cuadricula se vea completa en la ventana
+        """
+
+        if GRID_WIDTH == 0 or GRID_HEIGHT == 0:
+            return
+        
+        world_width = GRID_WIDTH * BASE_CELL_SIZE
+        world_height = GRID_HEIGHT * BASE_CELL_SIZE
+
+        zoom_x = self.width() / world_width
+        zoom_y = self.height() / world_height
+
+        self.zoom_level = min(zoom_x, zoom_y)
+
+        new_grid_pixel_width = world_width * self.zoom_level
+        new_grid_pixel_height = world_height * self.zoom_level
+
+        cell_size = BASE_CELL_SIZE * self.zoom_level
+
+        offset_pixels_x = (self.width() - new_grid_pixel_width) / 2
+        offset_pixels_y = (self.height() - new_grid_pixel_height) / 2
+
+        self.view_offset_x = -offset_pixels_x / cell_size
+        self.view_offset_y = -offset_pixels_y / cell_size
+
+        self.update()
+
+    def wheelEvent(self, event):
+        """
+        Zoom con la rueda del raton
+        """
+
+        delta = event.angleDelta().y()
+
+        mouse_pos = event.position()
+        grid_pos_before_zoom = self._pixel_to_grid(mouse_pos)
+
+        if delta > 0:
+            self.zoom_level *= 1.05
+        else:
+            self.zoom_level /= 1.05
+
+        self.zoom_level = max(0.1, min(self.zoom_level, 10.0))
+
+        grid_pos_after_zoom = self._pixel_to_grid(mouse_pos)
+        self.view_offset_x += grid_pos_before_zoom.x() - grid_pos_after_zoom.x() 
+        self.view_offset_y += grid_pos_before_zoom.y() - grid_pos_after_zoom.y()
+
+        self.update()
+
+    def mousePressEvent(self, event):
+        if event.button() == QtCore.Qt.LeftButton:
+            grid_pos = self._pixel_to_grid(event.position())
+            grid_x = int(grid_pos.x())
+            grid_y = int(grid_pos.y())
+
+            if 0 <= grid_x < GRID_WIDTH and 0 <= grid_y < GRID_HEIGHT:
+                self.grid_state[grid_y][grid_x] = 1 - self.grid_state[grid_y][grid_x]
+                self.update()
+                event.accept()
+        elif event.button() == QtCore.Qt.MiddleButton or event.button() == QtCore.Qt.RightButton:
+            self.panning = True
+            self.last_pan_pos = event.position()
+            self.setCursor(QtCore.Qt.ClosedHandCursor)
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if self.panning:
+            delta = event.position() - self.last_pan_pos
+            self.last_pan_pos = event.position()
+
+            cell_size = BASE_CELL_SIZE * self.zoom_level
+
+            self.view_offset_x -= delta.x() / cell_size
+            self.view_offset_y -= delta.y() / cell_size
+            self.update()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == QtCore.Qt.MiddleButton or event.button() == QtCore.Qt.RightButton:
+            self.panning = False
+            self.setCursor(QtCore.Qt.ArrowCursor)
     
     def recalculate_geometry(self):
         """
@@ -51,14 +148,22 @@ class GridWidget(QtWidgets.QWidget):
         """
 
         painter = QtGui.QPainter(self)
+        painter.fillRect(self.rect(), QtGui.QColor('black'))
 
-        if self.cell_size == 0:
-            return
+        cell_size = BASE_CELL_SIZE * self.zoom_level
+
+        start_x = max(0, int(self.view_offset_x))
+        start_y = max(0, int(self.view_offset_y))
+        end_x = min(GRID_WIDTH, int(self.view_offset_x + self.width() / cell_size) + 1)
+        end_y = min(GRID_HEIGHT, int(self.view_offset_y + self.height() / cell_size) + 1)
 
         
-        for y in range(GRID_HEIGHT):
-            for x in range(GRID_WIDTH):
+        for y in range(start_y, end_y):
+            for x in range(start_x, end_x):
                 
+                screen_x = (x - self.view_offset_x) * cell_size
+                screen_y = (y - self.view_offset_y) * cell_size
+
                 if self.grid_state[y][x] == 1:
                     #celula viva
                     brush = QtGui.QColor('white')
@@ -66,31 +171,26 @@ class GridWidget(QtWidgets.QWidget):
                     #celula muerta
                     brush = QtGui.QColor('black')
                 painter.setBrush(brush)
-                painter.setPen(QtGui.QColor('gray'))
+                
+                if self.zoom_level >= 0.6:
+                    painter.setPen(QtGui.QColor('#333333'))
+                else:
+                    painter.setPen(QtCore.Qt.NoPen)
 
-                painter.drawRect(
-                    self.offset_x + x * self.cell_size,
-                    self.offset_y + y * self.cell_size,
-                    self.cell_size,
-                    self.cell_size
-                )
-    
-    def mousePressEvent(self, event):
+                painter.drawRect(QtCore.QRectF(screen_x, screen_y, cell_size, cell_size))
+
+    def _pixel_to_grid(self, pos):
         """
-        Evento de click del raton
+        Convierte una posicion en pixeles a coordenadas de la cuadricula
         """
-        click_x = event.position().x()
-        click_y = event.position().y()
 
-        relative_x = click_x - self.offset_x
-        relative_y = click_y - self.offset_y
+        cell_size = BASE_CELL_SIZE * self.zoom_level
 
-        grid_x = int(relative_x // self.cell_size)
-        grid_y = int(relative_y // self.cell_size)
+        grid_x = self.view_offset_x + pos.x() / cell_size
+        grid_y = self.view_offset_y + pos.y() / cell_size
 
-        if 0 <= grid_x < GRID_WIDTH and 0 <= grid_y < GRID_HEIGHT:
-            self.grid_state[grid_y][grid_x] = 1 - self.grid_state[grid_y][grid_x]
-            self.update()
+        return QtCore.QPointF(grid_x, grid_y)
+                
 
     
     def next_generation(self):
