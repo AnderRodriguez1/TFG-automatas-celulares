@@ -3,8 +3,8 @@ import random
 from PySide6 import QtWidgets, QtCore, QtGui
 import numpy as np
 
-GRID_WIDTH = 50
-GRID_HEIGHT = 50
+GRID_WIDTH = 100
+GRID_HEIGHT = 100
 BASE_CELL_SIZE = 15
 #TODO: hacer que quizas se use la gpu para renderizar?
 class GridWidget(QtWidgets.QWidget):
