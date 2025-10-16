@@ -13,6 +13,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.next_button = QtWidgets.QPushButton("Siguiente Generación")
         self.next_button.clicked.connect(self.grid_widget.next_generation)
+        self.restart_button = QtWidgets.QPushButton("Reiniciar")
+        self.restart_button.clicked.connect(self.grid_widget.restart_grid)
 
         self.timer_button = QtWidgets.QPushButton("Iniciar animación")
         self.timer_button.setCheckable(True)
@@ -22,6 +24,7 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(self.grid_widget)
         layout.addWidget(self.next_button)
         layout.addWidget(self.timer_button)
+        layout.addWidget(self.restart_button)
 
         self.timer = QtCore.QTimer()
         self.timer.setInterval(500)

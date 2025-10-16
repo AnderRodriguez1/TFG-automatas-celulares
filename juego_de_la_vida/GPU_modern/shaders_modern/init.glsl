@@ -11,5 +11,5 @@ void main()
     vec2 grid_coord = floor(gl_FragCoord.xy); 
     float r = random(grid_coord + u_seed);
     float state = step(0.5, r);
-    FragColor = vec4(vec3(state), 1.0);
+    FragColor = vec4(vec3(0), 1.0);
 }

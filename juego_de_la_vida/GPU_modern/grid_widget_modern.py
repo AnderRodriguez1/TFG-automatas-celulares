@@ -24,10 +24,12 @@ class GridWidget(QOpenGLWidget):
         self.init_program = None
         self.display_program = None
         self.flip_program = None
+        self.life_program = None
         # VAOs
         self.init_vao = None
         self.display_vao = None
         self.flip_vao = None
+        self.life_vao = None
         # FBOs y Texturas
         self.fbos = []
         self.textures = []
@@ -52,10 +54,12 @@ class GridWidget(QOpenGLWidget):
             init_source = load_shader_source("shaders_modern/init.glsl")
             display_source = load_shader_source("shaders_modern/display.glsl")
             flip_source = load_shader_source("shaders_modern/flip.glsl")
+            life_source = load_shader_source("shaders_modern/life_game.glsl")
 
             self.init_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=init_source)
             self.display_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=display_source)
             self.flip_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=flip_source)
+            self.life_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=life_source)
 
             vertices = np.array([-1, -1, 1, -1, 1, 1, -1, 1], dtype='f4')
             indices = np.array([0, 1, 2, 0, 2, 3], dtype='i4')
@@ -66,6 +70,7 @@ class GridWidget(QOpenGLWidget):
             self.init_vao = self.ctx.vertex_array(self.init_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             self.display_vao = self.ctx.vertex_array(self.display_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             self.flip_vao = self.ctx.vertex_array(self.flip_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
+            self.life_vao = self.ctx.vertex_array(self.life_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
 
             for _ in range(2):
                 tex = self.ctx.texture((GRID_WIDTH, GRID_HEIGHT), 4, dtype='f4')
@@ -118,11 +123,19 @@ class GridWidget(QOpenGLWidget):
             self.display_program.release()
         if self.flip_program: 
             self.flip_program.release()
+        if self.life_program: 
+            self.life_program.release()
+        if self.life_vao: 
+            self.life_vao.release()
         if self.ctx: 
             self.ctx.release()
         print("Recursos liberados.")
 
     def next_generation(self):
+        self.run_life_shader()
+        self.update()
+
+    def restart_grid(self):
         self.run_init_shader()
         self.update()
 
@@ -163,6 +176,27 @@ class GridWidget(QOpenGLWidget):
 
             self.init_vao.render(moderngl.TRIANGLES)
 
+            self.current_texture_idx = dest_idx
+        finally:
+            self.doneCurrent()
+
+    def run_life_shader(self):
+        """
+        Funcion para ejecutar el shader de la vida
+        """
+        self.makeCurrent()
+        try:
+            source_idx = self.current_texture_idx
+            dest_idx = 1 - source_idx
+
+            self.fbos[dest_idx].use()
+
+            self.life_program['u_grid_size'].value = (GRID_WIDTH, GRID_HEIGHT)
+
+            self.textures[source_idx].use(location=0)
+            self.life_program['u_state_texture'].value = 0
+
+            self.life_vao.render(moderngl.TRIANGLES)
             self.current_texture_idx = dest_idx
         finally:
             self.doneCurrent()
