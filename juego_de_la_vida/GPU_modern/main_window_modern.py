@@ -27,7 +27,7 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(self.restart_button)
 
         self.timer = QtCore.QTimer()
-        self.timer.setInterval(500)
+        self.timer.setInterval(1000/24) # Intervalo entre frames en ms
         self.timer.timeout.connect(self.grid_widget.next_generation)
 
     @QtCore.Slot()
