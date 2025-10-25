@@ -3,7 +3,7 @@ from PySide6 import QtWidgets, QtCore
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 import numpy as np
 import moderngl
-from config_modern import GRID_WIDTH, GRID_HEIGHT
+from config_modern import Config
 
 def load_shader_source(shader_file: str) -> str:
     """
@@ -17,8 +17,10 @@ def load_shader_source(shader_file: str) -> str:
         raise FileNotFoundError(f"Error Crítico: No se pudo encontrar el archivo de shader: {shader_path}")
 
 class GridWidget(QOpenGLWidget):
-    def __init__(self):
+    def __init__(self, config: Config):
         super().__init__()
+        self.config = config
+
         self.ctx = None # Contexto de ModernGL
         # Programas de shaders
         self.init_program = None
@@ -36,8 +38,8 @@ class GridWidget(QOpenGLWidget):
         self.current_texture_idx = 0
         # Variables para zoom y paneo
         self.zoom_level = 1.0
-        self.view_offset_x = GRID_WIDTH / 2.0
-        self.view_offset_y = GRID_HEIGHT / 2.0
+        self.view_offset_x = self.config.grid_width / 2.0
+        self.view_offset_y = self.config.grid_height / 2.0
         self.panning = False
         self.last_pan_pos = QtCore.QPointF()
 
@@ -73,7 +75,7 @@ class GridWidget(QOpenGLWidget):
             self.life_vao = self.ctx.vertex_array(self.life_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
 
             for _ in range(2):
-                tex = self.ctx.texture((GRID_WIDTH, GRID_HEIGHT), 4, dtype='f4')
+                tex = self.ctx.texture((self.config.grid_width, self.config.grid_height), 4, dtype='f4')
                 tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
                 self.textures.append(tex)
                 self.fbos.append(self.ctx.framebuffer(color_attachments=[tex]))
@@ -98,7 +100,7 @@ class GridWidget(QOpenGLWidget):
 
         self.display_program['u_zoom_level'].value = self.zoom_level
         self.display_program['u_view_offset'].value = (self.view_offset_x, self.view_offset_y)
-        self.display_program['u_grid_size'].value = (GRID_WIDTH, GRID_HEIGHT)
+        self.display_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
 
         self.textures[self.current_texture_idx].use(location=0)
         self.display_program['u_state_texture'].value = 0
@@ -106,7 +108,7 @@ class GridWidget(QOpenGLWidget):
 
     def release_resources(self):
 
-        print("Liberando recursos de ModernGL...")
+        #print("Liberando recursos de ModernGL...")
         for fbo in self.fbos: 
             fbo.release()
         for texture in self.textures: 
@@ -129,7 +131,7 @@ class GridWidget(QOpenGLWidget):
             self.life_vao.release()
         if self.ctx: 
             self.ctx.release()
-        print("Recursos liberados.")
+        #print("Recursos liberados.")
 
     def next_generation(self):
         self.run_life_shader()
@@ -151,7 +153,7 @@ class GridWidget(QOpenGLWidget):
 
             self.fbos[dest_idx].use()
 
-            self.flip_program['u_grid_size'].value = (GRID_WIDTH, GRID_HEIGHT)
+            self.flip_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
             self.flip_program['u_flip_coord'].value = (x, y)
 
             self.textures[source_idx].use(location=0)
@@ -173,6 +175,7 @@ class GridWidget(QOpenGLWidget):
             self.fbos[dest_idx].use()
 
             self.init_program['u_seed'].value = np.random.random()
+            self.init_program['u_density'].value = self.config.density
 
             self.init_vao.render(moderngl.TRIANGLES)
 
@@ -191,7 +194,7 @@ class GridWidget(QOpenGLWidget):
 
             self.fbos[dest_idx].use()
 
-            self.life_program['u_grid_size'].value = (GRID_WIDTH, GRID_HEIGHT)
+            self.life_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
 
             self.textures[source_idx].use(location=0)
             self.life_program['u_state_texture'].value = 0
@@ -232,7 +235,7 @@ class GridWidget(QOpenGLWidget):
             grid_x = int(grid_pos.x())
             grid_y = int(grid_pos.y())
 
-            if 0 <= grid_x < GRID_WIDTH and 0 <= grid_y < GRID_HEIGHT: 
+            if 0 <= grid_x < self.config.grid_width and 0 <= grid_y < self.config.grid_height: 
                 self.flip_cell(grid_x, grid_y)
         elif event.button() == QtCore.Qt.MiddleButton or event.button() == QtCore.Qt.RightButton:
             self.panning = True
@@ -248,8 +251,8 @@ class GridWidget(QOpenGLWidget):
             delta = event.position() - self.last_pan_pos
             self.last_pan_pos = event.position()
 
-            grid_units_visible_x = GRID_WIDTH / self.zoom_level
-            grid_units_visible_y = GRID_HEIGHT / self.zoom_level
+            grid_units_visible_x = self.config.grid_width / self.zoom_level
+            grid_units_visible_y = self.config.grid_height / self.zoom_level
 
             delta_grid_x = (delta.x()) * grid_units_visible_x / self.width()
             delta_grid_y = (delta.y()) * grid_units_visible_y / self.height()
@@ -282,8 +285,8 @@ class GridWidget(QOpenGLWidget):
         norm_x = pixel_x / view_width - 0.5
         norm_y = (view_height - pixel_y) / view_height - 0.5
 
-        grid_units_visible_x = GRID_WIDTH / self.zoom_level
-        grid_units_visible_y = GRID_HEIGHT / self.zoom_level
+        grid_units_visible_x = self.config.grid_width / self.zoom_level
+        grid_units_visible_y = self.config.grid_height / self.zoom_level
 
         grid_x = self.view_offset_x + norm_x * grid_units_visible_x
         grid_y = self.view_offset_y + norm_y * grid_units_visible_y
