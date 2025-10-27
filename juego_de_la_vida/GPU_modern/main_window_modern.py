@@ -10,11 +10,29 @@ class MainWindow(QtWidgets.QMainWindow):
         self.config = config
 
         menu_bar = self.menuBar()
+
         config_menu = menu_bar.addMenu("&Configuración")
 
         reconfigure_action = QtGui.QAction("Reconfigurar...", self)
         reconfigure_action.triggered.connect(self.reconfigure_simulation)
         config_menu.addAction(reconfigure_action)
+
+        file_menu = menu_bar.addMenu("&Archivo")
+
+        save_texture_action = QtGui.QAction("Guardar patrón...", self)
+        save_texture_action.triggered.connect(self.save_texture)
+        file_menu.addAction(save_texture_action)
+
+        import_texture_action = QtGui.QAction("Importar patrón...", self)
+        import_texture_action.triggered.connect(self.import_texture)
+        file_menu.addAction(import_texture_action)
+
+        simulation_menu = menu_bar.addMenu("&Simulación")
+
+        select_simulation_action = QtGui.QAction("Seleccionar tipo de simulación...", self)
+        #select_simulation_action.triggered.connect(self.select_simulation)
+        simulation_menu.addAction(select_simulation_action)
+
 
         container = QtWidgets.QWidget()
 
@@ -95,3 +113,31 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.timer.stop()
             self.timer_button.setText("Iniciar animación")
+
+    @QtCore.Slot()
+    def save_texture(self):
+        """
+        Abre un diálogo para guardar el patrón actual
+        """
+
+        file_path, _ = QtWidgets.QFileDialog.getSaveFileName(self, 
+                        "Guardar patrón", 
+                        "", 
+                        "Imagen PNG (*.png);;Imagen BMP (*.bmp);;Imagen JPEG (*.jpg *.jpeg);;Todos los archivos (*)")
+
+        if file_path:
+            self.grid_widget.save_pattern(file_path)
+
+    @QtCore.Slot()
+    def import_texture(self):
+        """
+        Abre un diálogo para importar un patrón desde una imagen
+        """
+
+        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, 
+                        "Importar patrón", 
+                        "", 
+                        "Imagen PNG (*.png);;Imagen BMP (*.bmp);;Imagen JPEG (*.jpg *.jpeg);;Todos los archivos (*)")
+
+        if file_path:
+            self.grid_widget.import_pattern(file_path)

@@ -1,9 +1,12 @@
+from _ctypes import alignment
 from pathlib import Path
 from PySide6 import QtWidgets, QtCore
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 import numpy as np
 import moderngl
 from config_modern import Config
+from PIL import Image
+import numpy as np
 
 def load_shader_source(shader_file: str) -> str:
     """
@@ -292,3 +295,66 @@ class GridWidget(QOpenGLWidget):
         grid_y = self.view_offset_y + norm_y * grid_units_visible_y
         
         return QtCore.QPointF(grid_x, grid_y)
+
+    # En grid_widget_modern.py
+
+    def save_pattern(self, file_path: str):
+        """
+        Guarda la textura actual en un archivo de imagen
+        """
+        self.makeCurrent()
+        try:
+            texture = self.textures[self.current_texture_idx]
+            raw_data = texture.read(alignment=1)
+            width, height = texture.size
+            components = texture.components
+            #print("Guardando patrón")
+            
+            float_array = np.frombuffer(raw_data, dtype=np.float32) # El dtype es f32 para 4 componentes (RGBA)
+            float_array = float_array.reshape((height, width, components))
+            uint8_array = (float_array * 255).astype(np.uint8)
+                
+            image = Image.fromarray(uint8_array, 'RGBA' if components == 4 else 'RGB')
+
+            image = image.transpose(Image.FLIP_TOP_BOTTOM)
+            image.save(file_path)
+            #print(f"Patrón guardado correctamente en: {file_path}")
+
+        except Exception as e:
+            print(f"Se ha producido un error: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            self.doneCurrent()
+            
+
+    def import_pattern(self, file_path: str):
+        """
+        Importa un patrón desde un archivo de imagen
+        """
+        self.makeCurrent()
+        try:
+            image = Image.open(file_path)
+            image = image.resize((self.config.grid_width, self.config.grid_height))
+            image = image.convert("RGBA") 
+            image = image.transpose(method=Image.Transpose.FLIP_TOP_BOTTOM) # ModernGL tiene el eje y cambiado
+
+            uint8_array = np.array(image)
+            float_array = (uint8_array / 255.0).astype(np.float32)
+
+            data_for_texture = float_array.tobytes()
+
+            dest_idx = 1 - self.current_texture_idx
+            self.textures[dest_idx].write(data_for_texture, alignment=1)
+
+            self.current_texture_idx = dest_idx
+
+            print(f"Patrón importado desde {file_path}")
+
+        except Exception as e:
+            print(f"Error al importar el patrón: {e}")
+
+        finally:
+            self.doneCurrent()
+
+            self.update()
