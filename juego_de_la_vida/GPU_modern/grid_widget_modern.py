@@ -56,12 +56,10 @@ class GridWidget(QOpenGLWidget):
             self.ctx = moderngl.create_context()
             
             vertex_source = load_shader_source("shaders_modern/vertex.glsl")
-            init_source = load_shader_source("shaders_modern/init.glsl")
             display_source = load_shader_source("shaders_modern/display.glsl")
             flip_source = load_shader_source("shaders_modern/flip.glsl")
             life_source = load_shader_source("shaders_modern/life_game.glsl")
 
-            self.init_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=init_source)
             self.display_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=display_source)
             self.flip_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=flip_source)
             self.life_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=life_source)
@@ -72,7 +70,6 @@ class GridWidget(QOpenGLWidget):
             vbo = self.ctx.buffer(vertices)
             ebo = self.ctx.buffer(indices)
 
-            self.init_vao = self.ctx.vertex_array(self.init_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             self.display_vao = self.ctx.vertex_array(self.display_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             self.flip_vao = self.ctx.vertex_array(self.flip_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             self.life_vao = self.ctx.vertex_array(self.life_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
@@ -174,13 +171,18 @@ class GridWidget(QOpenGLWidget):
         """
         self.makeCurrent()
         try:
+
+            initial_state = np.random.choice([0.0, 1.0], size=(self.config.grid_height, self.config.grid_width), 
+                            p=[1 - self.config.density, self.config.density]).astype('f4')
+
+            rgba_grid = np.zeros((self.config.grid_height, self.config.grid_width, 4), dtype='f4')
+            rgba_grid[..., 0] = initial_state  # R
+            rgba_grid[..., 1] = initial_state  # G
+            rgba_grid[..., 2] = initial_state  # B
+            rgba_grid[..., 3] = 1.0  # A
+
             dest_idx = 1 - self.current_texture_idx
-            self.fbos[dest_idx].use()
-
-            self.init_program['u_seed'].value = np.random.random()
-            self.init_program['u_density'].value = self.config.density
-
-            self.init_vao.render(moderngl.TRIANGLES)
+            self.textures[dest_idx].write(rgba_grid.tobytes(), alignment=1)
 
             self.current_texture_idx = dest_idx
         finally:
