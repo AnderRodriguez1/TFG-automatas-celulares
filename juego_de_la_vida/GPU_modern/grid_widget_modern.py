@@ -26,7 +26,6 @@ class GridWidget(QOpenGLWidget):
 
         self.ctx = None # Contexto de ModernGL
         # Programas de shaders
-        self.init_program = None
         self.display_program = None
         self.flip_program = None
         self.life_program = None
@@ -54,16 +53,16 @@ class GridWidget(QOpenGLWidget):
         """
         try:
             self.ctx = moderngl.create_context()
-            
+            # Cargar los shaders
             vertex_source = load_shader_source("shaders_modern/vertex.glsl")
             display_source = load_shader_source("shaders_modern/display.glsl")
             flip_source = load_shader_source("shaders_modern/flip.glsl")
             life_source = load_shader_source("shaders_modern/life_game.glsl")
-
+            # Crear los programas de shaders
             self.display_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=display_source)
             self.flip_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=flip_source)
             self.life_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=life_source)
-
+            # Crear los VAOs
             vertices = np.array([-1, -1, 1, -1, 1, 1, -1, 1], dtype='f4')
             indices = np.array([0, 1, 2, 0, 2, 3], dtype='i4')
 
@@ -73,7 +72,7 @@ class GridWidget(QOpenGLWidget):
             self.display_vao = self.ctx.vertex_array(self.display_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             self.flip_vao = self.ctx.vertex_array(self.flip_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             self.life_vao = self.ctx.vertex_array(self.life_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
-
+            # Crear las texturas y FBOs
             for _ in range(2):
                 tex = self.ctx.texture((self.config.grid_width, self.config.grid_height), 4, dtype='f4')
                 tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
@@ -113,8 +112,6 @@ class GridWidget(QOpenGLWidget):
             fbo.release()
         for texture in self.textures: 
             texture.release()
-        if self.init_vao: 
-            self.init_vao.release()
         if self.display_vao: 
             self.display_vao.release()
         if self.flip_vao: 
@@ -171,10 +168,11 @@ class GridWidget(QOpenGLWidget):
         """
         self.makeCurrent()
         try:
-
+            # Inicializar una matriz con 1 y 0 aleatorios segun la densidad
             initial_state = np.random.choice([0.0, 1.0], size=(self.config.grid_height, self.config.grid_width), 
                             p=[1 - self.config.density, self.config.density]).astype('f4')
 
+            # Generar la textura RGBA a partir del estado inicial
             rgba_grid = np.zeros((self.config.grid_height, self.config.grid_width, 4), dtype='f4')
             rgba_grid[..., 0] = initial_state  # R
             rgba_grid[..., 1] = initial_state  # G
@@ -182,6 +180,7 @@ class GridWidget(QOpenGLWidget):
             rgba_grid[..., 3] = 1.0  # A
 
             dest_idx = 1 - self.current_texture_idx
+            # Escribir los datos de la textura en bytes
             self.textures[dest_idx].write(rgba_grid.tobytes(), alignment=1)
 
             self.current_texture_idx = dest_idx
