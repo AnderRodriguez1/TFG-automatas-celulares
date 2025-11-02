@@ -27,13 +27,12 @@ class GridWidget(QOpenGLWidget):
         self.ctx = None # Contexto de ModernGL
         # Programas de shaders
         self.display_program = None
-        self.flip_program = None
-        self.life_program = None
+        self.activate_cell_program = None
+        self.neuron_program = None
         # VAOs
-        self.init_vao = None
         self.display_vao = None
-        self.flip_vao = None
-        self.life_vao = None
+        self.activate_cell_vao = None
+        self.neuron_vao = None
         # FBOs y Texturas
         self.fbos = []
         self.textures = []
@@ -54,14 +53,14 @@ class GridWidget(QOpenGLWidget):
         try:
             self.ctx = moderngl.create_context()
             # Cargar los shaders
-            vertex_source = load_shader_source("shaders_modern/vertex.glsl")
-            display_source = load_shader_source("shaders_modern/display.glsl")
-            flip_source = load_shader_source("shaders_modern/flip.glsl")
-            life_source = load_shader_source("shaders_modern/life_game.glsl")
+            vertex_source = load_shader_source("shaders/vertex.glsl")
+            display_source = load_shader_source("shaders/display.glsl")
+            activate_cell_source = load_shader_source("shaders/activate_cell.glsl")
+            neuron_source = load_shader_source("shaders/fitzhugh_nagumo_evo.glsl")
             # Crear los programas de shaders
             self.display_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=display_source)
-            self.flip_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=flip_source)
-            self.life_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=life_source)
+            self.activate_cell_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=activate_cell_source)
+            self.neuron_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=neuron_source)
             # Crear los VAOs
             vertices = np.array([-1, -1, 1, -1, 1, 1, -1, 1], dtype='f4')
             indices = np.array([0, 1, 2, 0, 2, 3], dtype='i4')
@@ -70,8 +69,8 @@ class GridWidget(QOpenGLWidget):
             ebo = self.ctx.buffer(indices)
 
             self.display_vao = self.ctx.vertex_array(self.display_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
-            self.flip_vao = self.ctx.vertex_array(self.flip_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
-            self.life_vao = self.ctx.vertex_array(self.life_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
+            self.activate_cell_vao = self.ctx.vertex_array(self.activate_cell_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
+            self.neuron_vao = self.ctx.vertex_array(self.neuron_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             # Crear las texturas y FBOs
             for _ in range(2):
                 tex = self.ctx.texture((self.config.grid_width, self.config.grid_height), 4, dtype='f4')
@@ -114,31 +113,29 @@ class GridWidget(QOpenGLWidget):
             texture.release()
         if self.display_vao: 
             self.display_vao.release()
-        if self.flip_vao: 
-            self.flip_vao.release()
-        if self.init_program: 
-            self.init_program.release()
+        if self.activate_cell_vao: 
+            self.activate_cell_vao.release()
         if self.display_program: 
             self.display_program.release()
-        if self.flip_program: 
-            self.flip_program.release()
-        if self.life_program: 
-            self.life_program.release()
-        if self.life_vao: 
-            self.life_vao.release()
+        if self.activate_cell_program: 
+            self.activate_cell_program.release()
+        if self.neuron_program: 
+            self.neuron_program.release()
+        if self.neuron_vao: 
+            self.neuron_vao.release()
         if self.ctx: 
             self.ctx.release()
         #print("Recursos liberados.")
 
     def next_generation(self):
-        self.run_life_shader()
+        self.run_neuron_shader()
         self.update()
 
     def restart_grid(self):
         self.run_init_shader()
         self.update()
 
-    def flip_cell(self, x, y):
+    def activate_cell(self, x, y):
         """
         Funcion para alternar el estado de una celda en (x, y)
         0 -> 1 o 1 -> 0
@@ -150,13 +147,14 @@ class GridWidget(QOpenGLWidget):
 
             self.fbos[dest_idx].use()
 
-            self.flip_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
-            self.flip_program['u_flip_coord'].value = (x, y)
+            self.activate_cell_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
+            self.activate_cell_program['u_flip_coord'].value = (x, y)
+            self.activate_cell_program['dt'].value = 1.0 / self.config.speed
 
             self.textures[source_idx].use(location=0)
-            self.flip_program['u_state_texture'].value = 0
+            self.activate_cell_program['u_state_texture'].value = 0
 
-            self.flip_vao.render(moderngl.TRIANGLES)
+            self.activate_cell_vao.render(moderngl.TRIANGLES)
             self.current_texture_idx = dest_idx
         finally:
             self.doneCurrent()
@@ -168,16 +166,17 @@ class GridWidget(QOpenGLWidget):
         """
         self.makeCurrent()
         try:
-            # Inicializar una matriz con 1 y 0 aleatorios segun la densidad
-            initial_state = np.random.choice([0.0, 1.0], size=(self.config.grid_height, self.config.grid_width), 
-                            p=[1 - self.config.density, self.config.density]).astype('f4')
 
             # Generar la textura RGBA a partir del estado inicial
             rgba_grid = np.zeros((self.config.grid_height, self.config.grid_width, 4), dtype='f4')
-            rgba_grid[..., 0] = initial_state  # R
-            rgba_grid[..., 1] = initial_state  # G
-            rgba_grid[..., 2] = initial_state  # B
             rgba_grid[..., 3] = 1.0  # A
+
+            num_initial_cells = int(self.config.grid_width * self.config.grid_height * self.config.density)
+
+            for _ in range(num_initial_cells):
+                x, y = np.random.randint(0, self.config.grid_width), np.random.randint(0, self.config.grid_height)
+                rgba_grid[y, x, 0] = 1.0  # R
+                rgba_grid[y, x, 1] = 0.1  # G
 
             dest_idx = 1 - self.current_texture_idx
             # Escribir los datos de la textura en bytes
@@ -187,9 +186,9 @@ class GridWidget(QOpenGLWidget):
         finally:
             self.doneCurrent()
 
-    def run_life_shader(self):
+    def run_neuron_shader(self):
         """
-        Funcion para ejecutar el shader de la vida
+        Funcion para ejecutar el shader de la neurona
         """
         self.makeCurrent()
         try:
@@ -198,12 +197,13 @@ class GridWidget(QOpenGLWidget):
 
             self.fbos[dest_idx].use()
 
-            self.life_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
+            self.neuron_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
+            self.neuron_program['dt'].value = 1.0 / self.config.speed
 
             self.textures[source_idx].use(location=0)
-            self.life_program['u_state_texture'].value = 0
+            self.neuron_program['u_state_texture'].value = 0
 
-            self.life_vao.render(moderngl.TRIANGLES)
+            self.neuron_vao.render(moderngl.TRIANGLES)
             self.current_texture_idx = dest_idx
         finally:
             self.doneCurrent()
@@ -240,7 +240,7 @@ class GridWidget(QOpenGLWidget):
             grid_y = int(grid_pos.y())
 
             if 0 <= grid_x < self.config.grid_width and 0 <= grid_y < self.config.grid_height: 
-                self.flip_cell(grid_x, grid_y)
+                self.activate_cell(grid_x, grid_y)
         elif event.button() == QtCore.Qt.MiddleButton or event.button() == QtCore.Qt.RightButton:
             self.panning = True
             self.last_pan_pos = event.position()

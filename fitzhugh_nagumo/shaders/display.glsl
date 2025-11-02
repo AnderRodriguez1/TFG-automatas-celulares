@@ -7,6 +7,16 @@ uniform float u_zoom_level;
 uniform vec2 u_view_offset;
 uniform vec2 u_grid_size;
 
+vec3 colormap(float value){
+    vec3 blue = vec3(0.0, 0.0, 0.5);
+    vec3 yellow = vec3(1.0, 1.0, 0.0);
+    vec3 white = vec3(1.0, 1.0, 1.0);
+
+    vec3 color = mix(blue, yellow, value*2.0);
+    color = mix(color, white, max(0.0, value - 0.5) * 2.0);
+    return color;
+}
+
 void main()
 {
     vec2 sample_coord = (TexCoords - 0.5) / u_zoom_level + (u_view_offset / u_grid_size);
@@ -16,7 +26,15 @@ void main()
         return;
     }
 
-    vec3 final_color = texture(u_state_texture, sample_coord).rgb;
+    float v = texture(u_state_texture, sample_coord).r;
+
+    vec3 final_color;
+
+    if (v <= 0.0){
+        final_color = vec3(0.0, 0.0, 0.0);
+    }else{
+        final_color = colormap(v);
+    }
     
     vec2 grid_coord_float = sample_coord * u_grid_size;
     vec2 inside_cell_coord = fract(grid_coord_float);
