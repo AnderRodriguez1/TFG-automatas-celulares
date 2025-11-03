@@ -29,10 +29,12 @@ class GridWidget(QOpenGLWidget):
         self.display_program = None
         self.activate_cell_program = None
         self.neuron_program = None
+        self.block_program = None
         # VAOs
         self.display_vao = None
         self.activate_cell_vao = None
         self.neuron_vao = None
+        self.block_vao = None
         # FBOs y Texturas
         self.fbos = []
         self.textures = []
@@ -56,11 +58,13 @@ class GridWidget(QOpenGLWidget):
             vertex_source = load_shader_source("shaders/vertex.glsl")
             display_source = load_shader_source("shaders/display.glsl")
             activate_cell_source = load_shader_source("shaders/activate_cell.glsl")
-            neuron_source = load_shader_source("shaders/fitzhugh_nagumo_evo.glsl")
+            neuron_source = load_shader_source("shaders/greenberg_h.glsl")
+            block_source = load_shader_source("shaders/block_cell.glsl")
             # Crear los programas de shaders
             self.display_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=display_source)
             self.activate_cell_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=activate_cell_source)
             self.neuron_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=neuron_source)
+            self.block_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=block_source)
             # Crear los VAOs
             vertices = np.array([-1, -1, 1, -1, 1, 1, -1, 1], dtype='f4')
             indices = np.array([0, 1, 2, 0, 2, 3], dtype='i4')
@@ -71,6 +75,7 @@ class GridWidget(QOpenGLWidget):
             self.display_vao = self.ctx.vertex_array(self.display_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             self.activate_cell_vao = self.ctx.vertex_array(self.activate_cell_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             self.neuron_vao = self.ctx.vertex_array(self.neuron_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
+            self.block_vao = self.ctx.vertex_array(self.block_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             # Crear las texturas y FBOs
             for _ in range(2):
                 tex = self.ctx.texture((self.config.grid_width, self.config.grid_height), 4, dtype='f4')
@@ -123,6 +128,10 @@ class GridWidget(QOpenGLWidget):
             self.neuron_program.release()
         if self.neuron_vao: 
             self.neuron_vao.release()
+        if self.block_program: 
+            self.block_program.release()
+        if self.block_vao: 
+            self.block_vao.release()
         if self.ctx: 
             self.ctx.release()
         #print("Recursos liberados.")
@@ -208,6 +217,29 @@ class GridWidget(QOpenGLWidget):
         finally:
             self.doneCurrent()
 
+    def block_cell(self, x, y):
+        """
+        Bloquea una celda (actua como un muro)
+        """
+        self.makeCurrent()
+        try:
+            source_idx = self.current_texture_idx
+            dest_idx = 1 - source_idx
+
+            self.fbos[dest_idx].use()
+
+            self.block_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
+            self.block_program['u_block_coord'].value = (x, y)
+
+            self.textures[source_idx].use(location=0)
+            self.block_program['u_state_texture'].value = 0
+
+            self.block_vao.render(moderngl.TRIANGLES)
+            self.current_texture_idx = dest_idx
+        finally:
+            self.doneCurrent()
+        self.update()
+
     def wheelEvent(self, event):
         """
         Evento de rueda del raton para zoom 
@@ -241,10 +273,17 @@ class GridWidget(QOpenGLWidget):
 
             if 0 <= grid_x < self.config.grid_width and 0 <= grid_y < self.config.grid_height: 
                 self.activate_cell(grid_x, grid_y)
-        elif event.button() == QtCore.Qt.MiddleButton or event.button() == QtCore.Qt.RightButton:
+        elif event.button() == QtCore.Qt.RightButton:
             self.panning = True
             self.last_pan_pos = event.position()
             self.setCursor(QtCore.Qt.ClosedHandCursor)
+        elif event.button() == QtCore.Qt.MiddleButton:
+            grid_pos = self._pixel_to_grid(event.position())
+            grid_x = int(grid_pos.x())
+            grid_y = int(grid_pos.y())
+
+            if 0 <= grid_x < self.config.grid_width and 0 <= grid_y < self.config.grid_height: 
+                self.block_cell(grid_x, grid_y)
         event.accept()
 
     def mouseMoveEvent(self, event):

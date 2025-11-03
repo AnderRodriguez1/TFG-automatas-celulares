@@ -18,9 +18,15 @@ void main(){
     vec4 current_state = texture(u_state_texture, TexCoords);
     float v = current_state.r;
     float timer = current_state.g;
+    float is_blocked = current_state.b;
 
     float v_new = v;
     float timer_new = timer;
+
+    if (is_blocked > 0.5){
+        FragColor = vec4(0.0, 0.0, 1.0, 1.0);
+        return;
+    }
 
     if (timer <= 0.0){
         // Fase inactiva
@@ -53,5 +59,6 @@ void main(){
             v_new = 0.0;
         }
     }
+    
     FragColor = vec4(v_new, timer_new, 0.0, 1.0);
 }

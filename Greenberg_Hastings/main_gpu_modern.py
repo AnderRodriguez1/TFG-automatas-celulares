@@ -6,7 +6,7 @@ from config_tab import ConfigTab
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
 
-    config_tab = ConfigTab()
+    config_tab = ConfigTab()◙
 
     if config_tab.exec() == QtWidgets.QDialog.DialogCode.Accepted:
         config = config_tab.get_config()

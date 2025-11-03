@@ -26,11 +26,15 @@ void main()
         return;
     }
 
-    float v = texture(u_state_texture, sample_coord).r;
+    vec4 current_state = texture(u_state_texture, sample_coord);
+    float v = current_state.r;
+    float is_blocked = current_state.b;
 
     vec3 final_color;
 
-    if (v <= 0.0){
+    if (is_blocked > 0.5){
+        final_color = vec3(0.2, 0.5, 0.8); // Azul celeste para células bloqueadas
+    }else if (v <= 0.0){
         final_color = vec3(0.0, 0.0, 0.0);
     }else{
         final_color = colormap(v);
