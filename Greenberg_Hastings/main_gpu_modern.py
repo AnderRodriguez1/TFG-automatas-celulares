@@ -1,3 +1,12 @@
+"""
+Simulación de autómatas celulares usando el modelo de Greenberg-Hastings.
+· Controles:
+    - Click izquierdo: activar o desactivar células
+    - Click derecho y arrastrar: mover la vista
+    - Pulsar la rueda del raton: bloquear/desbloquear un autómata (muro)
+    - Rueda del ratón: hacer zoom in/out
+"""
+
 import sys
 from PySide6 import QtWidgets
 from main_window_modern import MainWindow
