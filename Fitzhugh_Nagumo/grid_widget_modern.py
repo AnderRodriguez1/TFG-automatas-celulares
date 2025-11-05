@@ -14,7 +14,7 @@ def load_shader_source(shader_file: str) -> str:
     """
     shader_path = Path(__file__).parent / shader_file
     try:
-        with open(shader_path, 'r') as f:
+        with open(shader_path, 'r', encoding='utf-8') as f:
             return f.read()
     except FileNotFoundError:
         raise FileNotFoundError(f"Error Crítico: No se pudo encontrar el archivo de shader: {shader_path}")
@@ -28,14 +28,12 @@ class GridWidget(QOpenGLWidget):
         # Programas de shaders
         self.display_program = None
         self.activate_cell_program = None
-        self.diffusion_program = None
-        self.react_program = None
+        self.fhn_program = None
         self.block_program = None
         # VAOs
         self.display_vao = None
         self.activate_cell_vao = None
-        self.diffusion_vao = None
-        self.react_vao = None
+        self.fhn_vao = None
         self.block_vao = None
         # FBOs y Texturas
         self.fbos = []
@@ -60,14 +58,12 @@ class GridWidget(QOpenGLWidget):
             vertex_source = load_shader_source("shaders/vertex.glsl")
             display_source = load_shader_source("shaders/display.glsl")
             activate_cell_source = load_shader_source("shaders/activate_cell.glsl")
-            diffusion_source = load_shader_source("shaders/diffusion.glsl")
-            react_source = load_shader_source("shaders/reaction.glsl")
+            fhn_source = load_shader_source("shaders/fhn.glsl")
             block_source = load_shader_source("shaders/block_cell.glsl")
             # Crear los programas de shaders
             self.display_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=display_source)
             self.activate_cell_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=activate_cell_source)
-            self.diffusion_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=diffusion_source)
-            self.react_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=react_source)
+            self.fhn_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=fhn_source)
             self.block_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=block_source)
             # Crear los VAOs
             vertices = np.array([-1, -1, 1, -1, 1, 1, -1, 1], dtype='f4')
@@ -78,8 +74,7 @@ class GridWidget(QOpenGLWidget):
 
             self.display_vao = self.ctx.vertex_array(self.display_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             self.activate_cell_vao = self.ctx.vertex_array(self.activate_cell_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
-            self.diffusion_vao = self.ctx.vertex_array(self.diffusion_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
-            self.react_vao = self.ctx.vertex_array(self.react_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
+            self.fhn_vao = self.ctx.vertex_array(self.fhn_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             self.block_vao = self.ctx.vertex_array(self.block_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             # Crear las texturas y FBOs
             for _ in range(2):
@@ -129,14 +124,10 @@ class GridWidget(QOpenGLWidget):
             self.display_program.release()
         if self.activate_cell_program: 
             self.activate_cell_program.release()
-        if self.diffusion_program: 
-            self.diffusion_program.release()
-        if self.diffusion_vao: 
-            self.diffusion_vao.release()
-        if self.react_program: 
-            self.react_program.release()
-        if self.react_vao: 
-            self.react_vao.release()
+        if self.fhn_vao: 
+            self.fhn_vao.release()
+        if self.fhn_program: 
+            self.fhn_program.release()
         if self.block_program: 
             self.block_program.release()
         if self.block_vao: 
@@ -146,8 +137,8 @@ class GridWidget(QOpenGLWidget):
         #print("Recursos liberados.")
 
     def next_generation(self):
-        self.run_diffusion_shader()
-        self.run_reaction_shader()
+        for _ in range(100):
+            self.run_fhn_shader()
         self.update()
 
     def restart_grid(self):
@@ -230,44 +221,21 @@ class GridWidget(QOpenGLWidget):
         finally:
             self.doneCurrent()
 
-    def run_diffusion_shader(self):
-        """
-        Funcion para ejecutar el shader de la difusion
-        """
+    def run_fhn_shader(self):
         self.makeCurrent()
         try:
             source_idx = self.current_texture_idx
             dest_idx = 1 - source_idx
 
             self.fbos[dest_idx].use()
-
-            self.diffusion_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
-
+            
+            self.fhn_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
+            self.fhn_program['dt'].value = 0.1 # dt pequeño y estable
+            
             self.textures[source_idx].use(location=0)
-            self.diffusion_program['u_state_texture'].value = 0
-
-            self.diffusion_vao.render(moderngl.TRIANGLES)
-            self.current_texture_idx = dest_idx
-        finally:
-            self.doneCurrent()
-    
-    def run_reaction_shader(self):
-        """
-        Funcion para ejecutar el shader de la reaccion
-        """
-        self.makeCurrent()
-        try:
-            source_idx = self.current_texture_idx
-            dest_idx = 1 - source_idx
-
-            self.fbos[dest_idx].use()
-
-            self.react_program['u_diffused_texture'].value = 0 
-            self.react_program['dt'].value = 0.1
-
-            self.textures[source_idx].use(location=0)
-
-            self.react_vao.render(moderngl.TRIANGLES)
+            self.fhn_program['u_state_texture'].value = 0
+            
+            self.fhn_vao.render(moderngl.TRIANGLES)
             self.current_texture_idx = dest_idx
         finally:
             self.doneCurrent()
