@@ -263,7 +263,7 @@ class GridWidget(QOpenGLWidget):
             self.fbos[dest_idx].use()
 
             self.react_program['u_diffused_texture'].value = 0 
-            self.react_program['dt'].value = 2.0
+            self.react_program['dt'].value = 0.1
 
             self.textures[source_idx].use(location=0)
 

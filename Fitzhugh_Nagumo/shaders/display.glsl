@@ -34,7 +34,8 @@ void main()
     }
 
     vec4 current_state = texture(u_state_texture, sample_coord); // Leer el estado actual de la celda
-    float v = current_state.r; // Voltaje de la celda (canal rojo)
+    float u = current_state.r; // Voltaje de la celda (canal rojo)
+    float u_norm = (u + 1.5) / 3.0; // Normalizar u a [0, 1] para el colormap
     float is_blocked = current_state.b; // Bloqueo de la celda (canal azul)
 
     vec3 final_color;
@@ -42,12 +43,12 @@ void main()
     if (is_blocked > 0.5){
         // Si esta bloqueada
         final_color = vec3(0.2, 0.5, 0.8); // Azul celeste para células bloqueadas
-    }else if (v <= 0.0){
+    }else if (u <= 0.0){
         // Si no esta bloqueada, pero esta totalmente apagada
         final_color = vec3(0.0, 0.0, 0.0);
     }else{
         // No esta bloqueada y tiene voltaje
-        final_color = colormap(v);
+        final_color = colormap(u_norm);
     }
     
     // Calcular las coordenadas dentro de la celda para dibujar bordes

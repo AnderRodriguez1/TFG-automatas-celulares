@@ -9,8 +9,8 @@ uniform vec2 u_grid_size;
 uniform vec2 u_flip_coord; // El nombre del uniform no es ideal, pero funciona
 
 // Valores del "more stable phase" del paper
-const float U_SPOT = 0.75;
-const float V_SPOT = 0.11;
+const float U_SPOT = 1.5;
+const float V_SPOT = 0.0;
 
 void main(){
     vec4 current_state = texture(u_state_texture, TexCoords);
