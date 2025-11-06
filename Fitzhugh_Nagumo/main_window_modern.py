@@ -6,17 +6,17 @@ from config_tab import ConfigTab
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, config: Config):
         super().__init__()
-        self.setWindowTitle("Juego de la Vida - GPU")
+        self.setWindowTitle("Modelo de FitzHugh-Nagumo")
         self.config = config
-
+        # Menu superior
         menu_bar = self.menuBar()
-
+        # Opcion de configuracion
         config_menu = menu_bar.addMenu("&Configuración")
-
+        # Accion de reconfigurar
         reconfigure_action = QtGui.QAction("Reconfigurar...", self)
         reconfigure_action.triggered.connect(self.reconfigure_simulation)
         config_menu.addAction(reconfigure_action)
-
+        # Opcion de guardar/importar patron
         file_menu = menu_bar.addMenu("&Archivo")
 
         save_texture_action = QtGui.QAction("Guardar patrón...", self)
@@ -33,7 +33,7 @@ class MainWindow(QtWidgets.QMainWindow):
         #select_simulation_action.triggered.connect(self.select_simulation)
         simulation_menu.addAction(select_simulation_action)
 
-
+        # Añadir todo a los widgets
         container = QtWidgets.QWidget()
 
         self.setCentralWidget(container)

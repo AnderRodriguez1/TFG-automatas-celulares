@@ -112,29 +112,33 @@ class GridWidget(QOpenGLWidget):
     def release_resources(self):
 
         #print("Liberando recursos de ModernGL...")
-        for fbo in self.fbos: 
-            fbo.release()
-        for texture in self.textures: 
-            texture.release()
-        if self.display_vao: 
-            self.display_vao.release()
-        if self.activate_cell_vao: 
-            self.activate_cell_vao.release()
-        if self.display_program: 
-            self.display_program.release()
-        if self.activate_cell_program: 
-            self.activate_cell_program.release()
-        if self.fhn_vao: 
-            self.fhn_vao.release()
-        if self.fhn_program: 
-            self.fhn_program.release()
-        if self.block_program: 
-            self.block_program.release()
-        if self.block_vao: 
-            self.block_vao.release()
-        if self.ctx: 
-            self.ctx.release()
-        #print("Recursos liberados.")
+        self.makeCurrent()
+        try:
+            for fbo in self.fbos: 
+                fbo.release()
+            for texture in self.textures: 
+                texture.release()
+            if self.display_vao: 
+                self.display_vao.release()
+            if self.activate_cell_vao: 
+                self.activate_cell_vao.release()
+            if self.display_program: 
+                self.display_program.release()
+            if self.activate_cell_program: 
+                self.activate_cell_program.release()
+            if self.fhn_vao: 
+                self.fhn_vao.release()
+            if self.fhn_program: 
+                self.fhn_program.release()
+            if self.block_program: 
+                self.block_program.release()
+            if self.block_vao: 
+                self.block_vao.release()
+            if self.ctx: 
+                self.ctx.release()
+            #print("Recursos liberados.")
+        finally:
+            self.doneCurrent()
 
     def next_generation(self):
         for _ in range(100):
@@ -159,8 +163,6 @@ class GridWidget(QOpenGLWidget):
 
             self.activate_cell_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
             self.activate_cell_program['u_flip_coord'].value = (x, y)
-            # Ya no necesitamos pasar 'dt' a este shader
-            # self.activate_cell_program['dt'].value = 1.0 / self.config.speed <-- Eliminar esta línea
 
             self.textures[source_idx].use(location=0)
             self.activate_cell_program['u_state_texture'].value = 0
@@ -171,37 +173,29 @@ class GridWidget(QOpenGLWidget):
             self.doneCurrent()
         self.update()
 
-    # En la clase GridWidget de grid_widget_modern.py
-
     def run_init_shader(self):
         """
-        Funcion para ejecutar el shader de inicializacion, replicando
-        las condiciones iniciales de la Fig. 2 del paper de Asgari et al.
+        Funcion para ejecutar el shader de inicializacion.
         """
         self.makeCurrent()
         try:
-            # --- PARÁMETROS DEL PAPER ---
-            # "less stable phase (u=0, v=0)"
+            # Todo negro excepto un cuadrado en el centro
             u_background = 0.0
             v_background = 0.0
 
-            # "spot of more stable phase (u=0.75, v=0.11)"
+            # Cuadrado del centro (valores sacados de "Pattern Formation of the FitzHugh-Nagumo Model:
+            # Cellular Automata Approach")
             u_spot = 0.75
             v_spot = 0.11
             
-            # El paper no especifica el tamaño del "spot", usemos un cuadrado pequeño
-            spot_size = 10 # 10x10 píxeles
-
-            # --- CREACIÓN DE LA MATRIZ DE ESTADO INICIAL ---
-            
-            # 1. Empezamos con una cuadrícula vacía (el "less stable phase")
-            # NOTA: No normalizamos aquí, los valores del paper parecen estar ya en un rango ~[0,1]
+            spot_size = 10 # Tamaño del cuadrado
+            # Inicializar con todo 0
             rgba_grid = np.zeros((self.config.grid_height, self.config.grid_width, 4), dtype='f4')
             rgba_grid[..., 0] = u_background
             rgba_grid[..., 1] = v_background
             rgba_grid[..., 3] = 1.0  # Canal Alpha
 
-            # 2. Calculamos la posición del "spot" en el centro
+            # Calcular la posicion del centro
             center_x = self.config.grid_width // 2
             center_y = self.config.grid_height // 2
             
@@ -210,11 +204,12 @@ class GridWidget(QOpenGLWidget):
             start_y = center_y - spot_size // 2
             end_y = center_y + spot_size // 2
 
-            # 3. "Pintamos" el spot en la matriz con los valores del "more stable phase"
+            # Se pinta el cuadrado con los valores spot
+            # Igual habria que cambiar la condicion inicial
             rgba_grid[start_y:end_y, start_x:end_x, 0] = u_spot  # Canal R = u
             rgba_grid[start_y:end_y, start_x:end_x, 1] = v_spot  # Canal G = v
 
-            # --- ESCRITURA EN LA TEXTURA DE LA GPU ---
+            # Se escribe la textura en la gpu
             dest_idx = 1 - self.current_texture_idx
             self.textures[dest_idx].write(rgba_grid.tobytes(), alignment=1)
             self.current_texture_idx = dest_idx
@@ -224,17 +219,24 @@ class GridWidget(QOpenGLWidget):
     def run_fhn_shader(self):
         self.makeCurrent()
         try:
+            # Actualizar la textura que NO está en pantalla
             source_idx = self.current_texture_idx
             dest_idx = 1 - source_idx
 
             self.fbos[dest_idx].use()
-            
+            # Configurar los parámetros del shader
             self.fhn_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
-            self.fhn_program['dt'].value = 0.1 # dt pequeño y estable
+            self.fhn_program['dt'].value = 1 / self.config.speed 
+            self.fhn_program['a'].value = self.config.a
+            self.fhn_program['b'].value = self.config.b
+            self.fhn_program['e'].value = self.config.e
+            self.fhn_program['Du'].value = self.config.Du
+            self.fhn_program['Dv'].value = self.config.Dv
             
+            # Enlazar la textura de origen
             self.textures[source_idx].use(location=0)
             self.fhn_program['u_state_texture'].value = 0
-            
+            # Ejecutar el shader
             self.fhn_vao.render(moderngl.TRIANGLES)
             self.current_texture_idx = dest_idx
         finally:
@@ -367,18 +369,21 @@ class GridWidget(QOpenGLWidget):
         """
         self.makeCurrent()
         try:
+            # Leer la textura actual
             texture = self.textures[self.current_texture_idx]
+            # Pasar la textura a un array
             raw_data = texture.read(alignment=1)
             width, height = texture.size
             components = texture.components
             #print("Guardando patrón")
-            
+            # Pasar a un array de floats
             float_array = np.frombuffer(raw_data, dtype=np.float32) # El dtype es f32 para 4 componentes (RGBA)
             float_array = float_array.reshape((height, width, components))
+            # Pasar a un array de uint8
             uint8_array = (float_array * 255).astype(np.uint8)
-                
+            # Crear la imagen con PIL y guardarla
             image = Image.fromarray(uint8_array, 'RGBA' if components == 4 else 'RGB')
-
+            # En openGL el eje y está invertido respecto a PIL
             image = image.transpose(Image.FLIP_TOP_BOTTOM)
             image.save(file_path)
             #print(f"Patrón guardado correctamente en: {file_path}")
@@ -397,16 +402,18 @@ class GridWidget(QOpenGLWidget):
         """
         self.makeCurrent()
         try:
+            # Abrir la imagen
             image = Image.open(file_path)
             image = image.resize((self.config.grid_width, self.config.grid_height))
             image = image.convert("RGBA") 
             image = image.transpose(method=Image.Transpose.FLIP_TOP_BOTTOM) # ModernGL tiene el eje y cambiado
-
+            # El array uint8 viene de la imagen
             uint8_array = np.array(image)
+            # Convertir a float32
             float_array = (uint8_array / 255.0).astype(np.float32)
-
+            # Pasar a bytes
             data_for_texture = float_array.tobytes()
-
+            # Aplicar la imagen a la textura que no está en pantalla
             dest_idx = 1 - self.current_texture_idx
             self.textures[dest_idx].write(data_for_texture, alignment=1)
 
