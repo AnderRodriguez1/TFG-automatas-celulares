@@ -80,6 +80,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         Abre la ventana de configuración para reconfigurar la simulación
         """
+        # Parar la animación si está activa
         if self.timer.isActive():
             self.timer.stop()
             self.timer_button.setChecked(False)

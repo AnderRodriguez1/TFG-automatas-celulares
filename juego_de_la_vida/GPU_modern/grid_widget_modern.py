@@ -116,8 +116,6 @@ class GridWidget(QOpenGLWidget):
             self.display_vao.release()
         if self.flip_vao: 
             self.flip_vao.release()
-        if self.init_program: 
-            self.init_program.release()
         if self.display_program: 
             self.display_program.release()
         if self.flip_program: 
@@ -168,6 +166,8 @@ class GridWidget(QOpenGLWidget):
         """
         self.makeCurrent()
         try:
+            dest_idx = 1 - self.current_texture_idx
+            tex = self.textures[dest_idx] if dest_idx < len(self.textures) else None
             # Inicializar una matriz con 1 y 0 aleatorios segun la densidad
             initial_state = np.random.choice([0.0, 1.0], size=(self.config.grid_height, self.config.grid_width), 
                             p=[1 - self.config.density, self.config.density]).astype('f4')
@@ -179,7 +179,6 @@ class GridWidget(QOpenGLWidget):
             rgba_grid[..., 2] = initial_state  # B
             rgba_grid[..., 3] = 1.0  # A
 
-            dest_idx = 1 - self.current_texture_idx
             # Escribir los datos de la textura en bytes
             self.textures[dest_idx].write(rgba_grid.tobytes(), alignment=1)
 

@@ -34,10 +34,14 @@ void main(){
     if (current_state > 0.5){// Si esta vivo
         if (live_neighbors == 2 || live_neighbors == 3){// Si tiene 2 o 3 vecinos vivos, sigue vivo
             new_state = 1.0;
+        }else{
+            new_state = 0.3; // Muere, pero se ve gris para saber cuales han estado vivas en algún momento
         }
-    } else {// Si esta muerto
+    }else{// Si esta muerto
         if (live_neighbors == 3){// Si tiene exactamente 3 vecinos vivos, nace
             new_state = 1.0;
+        } else if (current_state > 0.0){
+            new_state = current_state;
         }
     }
     FragColor = vec4(vec3(new_state), 1.0);// Se asigna el nuevo estado al color de salida
