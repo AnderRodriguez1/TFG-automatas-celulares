@@ -7,9 +7,10 @@ Repositorio del TFG sobre automatas celulares, hecho por Ander Rodríguez Muñoz
 
 -Por el momento hay 3 simulaciones diferentes:
 
-    * Juego de la vida \n
-    * Greenberg-Hastings (autómatas celulares con lógica discreta)
+    * Juego de la vida 
     
+    * Greenberg-Hastings (autómatas celulares con lógica discreta)
+
     * Fitzhugh-Nagumo (autómatas celulares que siguen un modelo difusivo)
 
 -Por el momento, las condiciones iniciales del modelo Fitzhugh-Nagumo es un cuadrado de 10x10 autómatas activos 
