@@ -7,6 +7,9 @@ import moderngl
 from config_modern import Config
 from PIL import Image
 import numpy as np
+import csv
+import os
+from pathlib import Path
 
 def load_shader_source(shader_file: str) -> str:
     """
@@ -46,6 +49,20 @@ class GridWidget(QOpenGLWidget):
         self.last_pan_pos = QtCore.QPointF()
 
         self._is_initialized = False
+
+        self.iteration_count = 0
+        self.csv_filename = "live_cell_count.csv"
+
+        output_dir = Path(__file__).parent / "output"
+        output_dir.mkdir(exist_ok=True)
+        self.csv_filename = output_dir / self.csv_filename
+
+        try:
+            with open(self.csv_filename, mode='w', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow(["Iteration", "Live Cell Count"])
+        except Exception as e:
+                print(f"Error al crear el archivo CSV: {e}")
 
     def initializeGL(self):
         """
@@ -134,6 +151,11 @@ class GridWidget(QOpenGLWidget):
 
     def restart_grid(self):
         self.run_init_shader()
+        self.iteration_count = 0
+        initial_data = self.textures[self.current_texture_idx].read(alignment=1)
+        float_array = np.frombuffer(initial_data, dtype=np.float32)
+        initial_live_count = np.sum(float_array[::4] > 0.5)  # Contar células vivas en el canal R
+        self._write_count_to_csv(initial_live_count)
         self.update()
 
     def flip_cell(self, x, y):
@@ -203,9 +225,25 @@ class GridWidget(QOpenGLWidget):
             self.life_program['u_state_texture'].value = 0
 
             self.life_vao.render(moderngl.TRIANGLES)
+
+            self.ctx.finish()
+
+            dest_texture = self.textures[dest_idx]
+            raw_data = dest_texture.read(alignment=1)
+            float_array = np.frombuffer(raw_data, dtype=np.float32)
+            live_count = np.sum(float_array[::4] > 0.5)  # Contar células vivas en el canal R
+            self.iteration_count += 1
+            self._write_count_to_csv(live_count)
+
             self.current_texture_idx = dest_idx
+
         finally:
             self.doneCurrent()
+
+    def _write_count_to_csv(self, count: int):
+        with open(self.csv_filename, mode='a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow([self.iteration_count, count])
 
     def wheelEvent(self, event):
         """
