@@ -32,8 +32,8 @@ void main(){
     float new_state = 0.0;
     // Logica de cambio de estado
     if (current_state > 0.5){// Si esta vivo
-        if (live_neighbors == 2 || live_neighbors == 3){// Si tiene 2 o 3 vecinos vivos, sigue vivo
-            new_state = 1.0;
+        if (live_neighbors == 2 || live_neighbors == 3){// Si tiene 2 o 3 vecinos vivos, sigue vivo (ir cambiando el numero maximo)
+            new_state = 1.0;                            // para probar diferentes variantes del juego de la vida
         }else{
             new_state = 0.3; // Muere, pero se ve gris para saber cuales han estado vivas en algún momento
         }
