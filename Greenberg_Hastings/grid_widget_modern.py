@@ -171,26 +171,46 @@ class GridWidget(QOpenGLWidget):
 
     def run_init_shader(self):
         """
-        Funcion para ejecutar el shader de inicializacion
+        Funcion para ejecutar el shader de inicializacion con las condiciones de Figure 2 del paper.
+        Lines are placed in the middle of the y-axis, starting from center_x and extending right.
         """
         self.makeCurrent()
         try:
-
-            # Generar la textura RGBA a partir del estado inicial
             rgba_grid = np.zeros((self.config.grid_height, self.config.grid_width, 4), dtype='f4')
-            rgba_grid[..., 3] = 1.0  # A
+            
+            # Initialize all cells to resting state (0), which is 0.5 when mapped to [0,1]
+            rgba_grid[..., 0] = 0.5 # R channel for 'u' value (0.5 for state 0)
+            rgba_grid[..., 1] = 0.5 # G channel (can be used for visualization or debugging)
+            rgba_grid[..., 2] = 0.0 # B channel for 'is_blocked' (0.0 means not blocked)
+            rgba_grid[..., 3] = 1.0 # Alpha channel
 
-            num_initial_cells = int(self.config.grid_width * self.config.grid_height * self.config.density)
+            # Calculate the horizontal and vertical center of the grid
+            center_x = self.config.grid_width // 2
+            center_y = self.config.grid_height // 2
 
-            for _ in range(num_initial_cells):
-                x, y = np.random.randint(0, self.config.grid_width), np.random.randint(0, self.config.grid_height)
-                rgba_grid[y, x, 0] = 1.0  # R
-                rgba_grid[y, x, 1] = 0.1  # G
+            # Determine the y-coordinates for the two lines.
+            # We want them centered. Let's place the refractory line (u=-1) at `center_y`
+            # and the excited line (u=1) at `center_y + 1`.
+            # This mimics the "bottom" and "next row up" structure relative to a visual center.
+            
+            refractory_row_idx = center_y
+            excited_row_idx = center_y + 1
+
+            # Apply the paper's initial conditions for Figure 2:
+            # u^0_{i,0} = -1 (Refractory) -> Mapped value 0.0
+            # This line starts from center_x and goes to the right (to grid_width-1)
+            if refractory_row_idx >= 0 and refractory_row_idx < self.config.grid_height:
+                rgba_grid[refractory_row_idx, center_x:, 0] = 0.0 
+
+            # u^0_{i,1} = 1 (Excited) -> Mapped value 1.0
+            # This line starts from center_x and goes to the right (to grid_width-1)
+            if excited_row_idx >= 0 and excited_row_idx < self.config.grid_height:
+                rgba_grid[excited_row_idx, center_x:, 0] = 1.0 
+            
+            # All other cells are already initialized to 0.5 (resting state 0)
 
             dest_idx = 1 - self.current_texture_idx
-            # Escribir los datos de la textura en bytes
             self.textures[dest_idx].write(rgba_grid.tobytes(), alignment=1)
-
             self.current_texture_idx = dest_idx
         finally:
             self.doneCurrent()
@@ -207,7 +227,6 @@ class GridWidget(QOpenGLWidget):
             self.fbos[dest_idx].use()
 
             self.neuron_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
-            self.neuron_program['dt'].value = 1.0 / self.config.speed
 
             self.textures[source_idx].use(location=0)
             self.neuron_program['u_state_texture'].value = 0
