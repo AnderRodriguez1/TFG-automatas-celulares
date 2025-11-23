@@ -51,7 +51,7 @@ class GridWidget(QOpenGLWidget):
         self._is_initialized = False
 
         self.iteration_count = 0
-        self.csv_filename = "live_cell_count_2_3_0_5.csv"
+        self.csv_filename = "live_cell_count_2_3_0_9.csv"
 
         output_dir = Path(__file__).parent / "output"
         output_dir.mkdir(exist_ok=True)
