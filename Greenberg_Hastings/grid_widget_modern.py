@@ -80,6 +80,8 @@ class GridWidget(QOpenGLWidget):
             for _ in range(2):
                 tex = self.ctx.texture((self.config.grid_width, self.config.grid_height), 4, dtype='f4')
                 tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
+                tex.repeat_x = False
+                tex.repeat_y = False
                 self.textures.append(tex)
                 self.fbos.append(self.ctx.framebuffer(color_attachments=[tex]))
             QtCore.QTimer.singleShot(0, self.perform_initial_render)
@@ -178,36 +180,32 @@ class GridWidget(QOpenGLWidget):
         try:
             rgba_grid = np.zeros((self.config.grid_height, self.config.grid_width, 4), dtype='f4')
             
-            # Initialize all cells to resting state (0), which is 0.5 when mapped to [0,1]
-            rgba_grid[..., 0] = 0.5 # R channel for 'u' value (0.5 for state 0)
-            rgba_grid[..., 1] = 0.5 # G channel (can be used for visualization or debugging)
-            rgba_grid[..., 2] = 0.0 # B channel for 'is_blocked' (0.0 means not blocked)
-            rgba_grid[..., 3] = 1.0 # Alpha channel
+            # Todas las celdas en estado de reposo (u=0) y no bloqueadas (is_blocked=0)
+            rgba_grid[..., 0] = 0.5 # Canal rojo para el estado (0.5 representa el estado de reposo u=0)
+            rgba_grid[..., 1] = 0.5 # Canal verde para nada por ahora
+            rgba_grid[..., 2] = 0.0 # Canal azul para 'is_blocked' (0.0 significa no bloqueado)
+            rgba_grid[..., 3] = 1.0 # Canal alfa
 
-            # Calculate the horizontal and vertical center of the grid
+            # Calcular el centro de la cuadrícula
             center_x = self.config.grid_width // 2
             center_y = self.config.grid_height // 2
 
-            # Determine the y-coordinates for the two lines.
-            # We want them centered. Let's place the refractory line (u=-1) at `center_y`
-            # and the excited line (u=1) at `center_y + 1`.
-            # This mimics the "bottom" and "next row up" structure relative to a visual center.
+            # Hay que determinar las filas para las lineas iniciales (replicar el paper)
             
             refractory_row_idx = center_y
             excited_row_idx = center_y + 1
 
-            # Apply the paper's initial conditions for Figure 2:
-            # u^0_{i,0} = -1 (Refractory) -> Mapped value 0.0
-            # This line starts from center_x and goes to the right (to grid_width-1)
+            # Aplicar las condiciones iniciales del paper para la Figura 2:
+            # u^0_{i,0} = -1 (Refractario) -> Valor mapeado 0.0
+            # Esta línea comienza desde center_x y se extiende hacia la derecha (hasta grid_width-1)
             if refractory_row_idx >= 0 and refractory_row_idx < self.config.grid_height:
                 rgba_grid[refractory_row_idx, center_x:, 0] = 0.0 
 
-            # u^0_{i,1} = 1 (Excited) -> Mapped value 1.0
-            # This line starts from center_x and goes to the right (to grid_width-1)
+            # u^0_{i,1} = 1 (Excitado) -> Valor mapeado 1.0
+            # Esta línea comienza desde center_x y se extiende hacia la derecha (hasta grid_width-1)
             if excited_row_idx >= 0 and excited_row_idx < self.config.grid_height:
                 rgba_grid[excited_row_idx, center_x:, 0] = 1.0 
-            
-            # All other cells are already initialized to 0.5 (resting state 0)
+        
 
             dest_idx = 1 - self.current_texture_idx
             self.textures[dest_idx].write(rgba_grid.tobytes(), alignment=1)
