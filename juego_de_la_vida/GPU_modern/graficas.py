@@ -1,3 +1,5 @@
+from matplotlib.offsetbox import HPacker
+from cProfile import label
 from PIL._imaging import font
 from pyparsing.util import line
 import matplotlib.pyplot as plt
@@ -75,5 +77,123 @@ def plot_density():
     fig.tight_layout()
     plt.show()
 
+def plot_all_rules_and_densities():
+    csv_path = Path(__file__).parent / "output"
+    
+    rules_data = {}
+
+    csv_files = sorted(csv_path.glob("*.csv"), key=lambda p: p.name)
+    
+    for csv in csv_files:
+        # Formato esperado: live_cell_count_S_B_0_D.csv
+        # Ejemplo: live_cell_count_1_2_0_05.csv
+        parts = csv.stem.split('_')
+        
+        if len(parts) < 7:
+            continue
+            
+        survive = parts[3]
+        born = parts[4]
+        density_part = parts[6] # El '05', '1', '3', etc.
+        
+        rule_key = f"{survive}_{born}"
+        
+        # Convertir la parte de densidad a float para ordenar correctamente 
+        try:
+            density_val = float(f"0.{density_part}")
+        except ValueError:
+            continue
+
+        if rule_key not in rules_data:
+            rules_data[rule_key] = []
+            
+        df = pd.read_csv(csv)
+        rules_data[rule_key].append((density_val, df))
+
+    for rule_key, data_list in rules_data.items():
+        # Hacer que las listas tengan la misma longitud
+
+        if rule_key == "1_2":
+            continue  # No hacer nada para esta regla, ya que es caótica, no llega a ser estable
+
+        max_len = 0
+
+        for _, df in data_list:
+            # use .iat for fast positional access and avoid using 'raise' inside a conditional expression
+            last_iter_val = df['Iteration'].iat[-1]
+            if last_iter_val != df['Iteration'].max():
+                raise ValueError("Inconsistent iteration lengths found.")
+            current_max = last_iter_val
+            if current_max > max_len:
+                max_len = current_max
+
+        updated_list = []
+
+        for density, df in data_list:
+            last_iter = df['Iteration'].iat[-1] if max_len != 0 else None
+            if last_iter < max_len:
+                last_value = df['Live Cell Count'].get(last_iter, df['Live Cell Count'].iloc[-1])
+
+                missing_iters = range(int(last_iter) + 1, int(max_len) + 1)
+
+                extension_df = pd.DataFrame({
+                    'Iteration': missing_iters,
+                    'Live Cell Count': last_value #Repetir el ultimo valor, ya que en todas se llega a un estado estable
+                                                  # excepto la 1_2
+                })
+
+                df_extended = pd.concat([df, extension_df], ignore_index=True)
+                updated_list.append((density, df_extended))
+            else:
+                updated_list.append((density, df))
+        rules_data[rule_key] = updated_list
+
+    
+    print(rules_data)  # Verificar que los datos se han cargado correctamente
+
+    # Crear la figura 2x2
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    axes = axes.flatten()
+    
+    # Ordenar las reglas para que salgan en orden (1_2, 2_3, 3_4, 4_5)
+    sorted_rules = sorted(rules_data.keys())
+    
+    # Títulos descriptivos para cada regla (puedes personalizarlos)
+    titles = {
+        "1_2": "1 mantiene, 2 reviven",
+        "2_3": "2 mantienen, 3 reviven (Clásico)",
+        "3_4": "3 mantienen, 4 reviven",
+        "4_5": "4 mantienen, 5 reviven"
+    }
+
+    for i, ax in enumerate(axes):
+        if i >= len(sorted_rules):
+            break
+            
+        rule = sorted_rules[i]
+        data_list = rules_data[rule]
+        
+        # Ordenar por densidad de menor a mayor para la leyenda
+        data_list.sort(key=lambda x: x[0])
+        
+        # Graficar cada densidad
+        for density, df in data_list:
+            ax.plot(df['Iteration'], df['Live Cell Count'], 
+                    marker='.', markersize=2, linestyle='-', linewidth=1, 
+                    label=f'{int(density*100)}%')
+        
+        # Configuración de cada subplot
+        title_text = titles.get(rule, f"Regla S:{rule.split('_')[0]} B:{rule.split('_')[1]}")
+        ax.set_title(title_text, fontsize=11, fontweight='bold', pad=10)
+        ax.set_xlabel('Iteración', labelpad=5)
+        ax.set_ylabel('Células vivas', labelpad=5)
+        #ax.set_yscale('log')
+        ax.grid(True, which='both', linestyle='--', alpha=0.6)
+        ax.legend(title="Densidad Inicial", fontsize='small')
+
+    fig.suptitle('Comparación de Reglas y Densidades', fontsize=16, fontweight='bold')
+    fig.tight_layout(rect=[0, 0, 1, 0.96], h_pad = 2)
+    plt.show()
+
 if __name__ == "__main__":
-    plot_density()
+    plot_all_rules_and_densities()

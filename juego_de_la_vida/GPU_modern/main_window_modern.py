@@ -39,6 +39,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(container)
         self.grid_widget = GridWidget(config=self.config)
 
+        self.live_count_label = QtWidgets.QLabel("Células vivas: 0")
+        self.live_count_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.live_count_label.setStyleSheet("QLabel { background-color: #202020; color: white; padding: 5px; font-weight: bold;}")
+
         self.next_button = QtWidgets.QPushButton("Siguiente Generación")
         self.next_button.clicked.connect(self.grid_widget.next_generation)
         self.restart_button = QtWidgets.QPushButton("Reiniciar")
@@ -49,10 +53,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.timer_button.clicked.connect(self.toggle_timer)
 
         self.layout = QtWidgets.QVBoxLayout(container)
-        self.layout.addWidget(self.grid_widget)
-        self.layout.addWidget(self.next_button)
-        self.layout.addWidget(self.timer_button)
-        self.layout.addWidget(self.restart_button)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
+        self.layout.addWidget(self.live_count_label)
+        self.layout.addWidget(self.grid_widget, 1)
+        self.layout.addWidget(self.next_button, 0)
+        self.layout.addWidget(self.timer_button, 0)
+        self.layout.addWidget(self.restart_button, 0)
 
         self.timer = QtCore.QTimer()
         self.timer.setInterval(1000/self.config.speed) # Intervalo entre frames en ms
@@ -68,13 +75,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.restart_button.clicked.disconnect()
         self.timer_button.clicked.disconnect()
         self.timer.timeout.disconnect()
+        self.grid_widget.live_count_changed.disconnect()
 
         self.next_button.clicked.connect(self.grid_widget.next_generation)
         self.restart_button.clicked.connect(self.grid_widget.restart_grid)
         self.timer_button.clicked.connect(self.toggle_timer)
-        self.timer.setInterval(1000/self.config.speed) # Intervalo entre frames en ms
+        self.timer.setInterval(int(1000/self.config.speed)) # Intervalo entre frames en ms
         self.timer.timeout.connect(self.grid_widget.next_generation)
-
+        self.grid_widget.live_count_changed.connect(self.update_live_count_label)
+        
     @QtCore.Slot()
     def reconfigure_simulation(self):
         """
@@ -142,3 +151,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         if file_path:
             self.grid_widget.import_pattern(file_path)
+
+    @QtCore.Slot(int)
+    def update_live_count_label(self, live_count: int):
+        """
+        Actualiza la etiqueta que muestra el número de células vivas
+        """
+        self.live_count_label.setText(f"Células vivas: {live_count}")

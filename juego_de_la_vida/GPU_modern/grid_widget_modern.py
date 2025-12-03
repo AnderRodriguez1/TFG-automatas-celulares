@@ -2,6 +2,7 @@ from _ctypes import alignment
 from pathlib import Path
 from PySide6 import QtWidgets, QtCore
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
+from PySide6.QtCore import Signal
 import numpy as np
 import moderngl
 from config_modern import Config
@@ -23,6 +24,9 @@ def load_shader_source(shader_file: str) -> str:
         raise FileNotFoundError(f"Error Crítico: No se pudo encontrar el archivo de shader: {shader_path}")
 
 class GridWidget(QOpenGLWidget):
+
+    live_count_changed = Signal(int)
+
     def __init__(self, config: Config):
         super().__init__()
         self.config = config
@@ -51,7 +55,7 @@ class GridWidget(QOpenGLWidget):
         self._is_initialized = False
 
         self.iteration_count = 0
-        self.csv_filename = "live_cell_count_2_3_0_9.csv"
+        self.csv_filename = "live_cell_count_4_5_0_9_borrar.csv"
 
         output_dir = Path(__file__).parent / "output"
         output_dir.mkdir(exist_ok=True)
@@ -101,7 +105,7 @@ class GridWidget(QOpenGLWidget):
             self.window().close()
 
     def perform_initial_render(self):
-        self.run_init_shader()
+        self.restart_grid()
         self._is_initialized = True
         self.update()
 
@@ -154,8 +158,9 @@ class GridWidget(QOpenGLWidget):
         self.iteration_count = 0
         initial_data = self.textures[self.current_texture_idx].read(alignment=1)
         float_array = np.frombuffer(initial_data, dtype=np.float32)
-        initial_live_count = np.sum(float_array[::4] > 0.5)  # Contar células vivas en el canal R
+        initial_live_count = int(np.sum(float_array[::4] > 0.5))  # Contar células vivas en el canal R
         self._write_count_to_csv(initial_live_count)
+        self.live_count_changed.emit(initial_live_count)
         self.update()
 
     def flip_cell(self, x, y):
@@ -231,9 +236,10 @@ class GridWidget(QOpenGLWidget):
             dest_texture = self.textures[dest_idx]
             raw_data = dest_texture.read(alignment=1)
             float_array = np.frombuffer(raw_data, dtype=np.float32)
-            live_count = np.sum(float_array[::4] > 0.5)  # Contar células vivas en el canal R
+            live_count = int(np.sum(float_array[::4] > 0.5))  # Contar células vivas en el canal R
             self.iteration_count += 1
             self._write_count_to_csv(live_count)
+            self.live_count_changed.emit(live_count)
 
             self.current_texture_idx = dest_idx
 
