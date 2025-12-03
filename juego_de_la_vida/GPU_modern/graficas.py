@@ -5,6 +5,7 @@ from pyparsing.util import line
 import matplotlib.pyplot as plt
 import pandas as pd
 from pathlib import Path
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes, mark_inset
 
 def plot_rules():
     # Load the CSV file
@@ -148,9 +149,34 @@ def plot_all_rules_and_densities():
                 updated_list.append((density, df))
         rules_data[rule_key] = updated_list
 
-    
-    print(rules_data)  # Verificar que los datos se han cargado correctamente
 
+
+    zoom_settings = {
+        "1_2": {
+            "xlim": (25, 150), 
+            "ylim": (2500, 3200), 
+            "loc": "upper center", # Abajo derecha para no tapar el inicio
+            "width": "50%", "height": "50%" 
+        },
+        "2_3": {
+            "xlim": (200, 3920),  
+            "ylim": (-50, 1000),
+            "loc": "upper center", 
+            "width": "45%", "height": "50%"
+        },
+        "3_4": {
+            "xlim": (7, 49),
+            "ylim": (-50, 200),
+            "loc": "upper center",
+            "width": "50%", "height": "50%"
+        },
+        "4_5": {
+            "xlim": (3, 47),
+            "ylim": (-20, 100),
+            "loc": "upper center",
+            "width": "50%", "height": "50%"
+        }
+    }
     # Crear la figura 2x2
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
     axes = axes.flatten()
@@ -190,6 +216,35 @@ def plot_all_rules_and_densities():
         #ax.set_yscale('log')
         ax.grid(True, which='both', linestyle='--', alpha=0.6)
         ax.legend(title="Densidad Inicial", fontsize='small')
+
+        if rule in zoom_settings:
+            cfg = zoom_settings[rule]
+            
+            # Usamos inset_axes para garantizar el tamaño físico de la caja
+            axins = inset_axes(ax, width=cfg["width"], height=cfg["height"], loc=cfg["loc"])
+            
+            # Volver a graficar los datos dentro de la caja
+            for density, df in data_list:
+                axins.plot(df['Iteration'], df['Live Cell Count'], 
+                        marker='.', markersize=2, linestyle='-', linewidth=1)
+
+            # Establecer límites del zoom
+            axins.set_xlim(*cfg["xlim"])
+            axins.set_ylim(*cfg["ylim"])
+
+            # Estética de la caja
+            axins.tick_params(axis='both', which='both', labelsize=7)
+            axins.grid(True, which='both', linestyle='--', alpha=0.6)
+            
+            # Dibujar líneas conectoras
+            # Si la caja está a la derecha, conectamos las esquinas de la izquierda (2 y 3)
+            # Si está arriba, las de abajo, etc. Ajuste automático básico:
+            if "right" in cfg["loc"]:
+                loc1, loc2 = 2, 4 # Conectar esquinas izquierda-arriba y derecha-abajo (diagonal) o 2 y 3
+                mark_inset(ax, axins, loc1=2, loc2=4, fc="none", ec="0.5")
+            else:
+                mark_inset(ax, axins, loc1=1, loc2=3, fc="none", ec="0.5")
+
 
     fig.suptitle('Comparación de Reglas y Densidades', fontsize=16, fontweight='bold')
     fig.tight_layout(rect=[0, 0, 1, 0.96], h_pad = 2)
