@@ -8,80 +8,79 @@ in vec2 TexCoords;
 uniform sampler2D u_state_texture; // Textura con el estado actual
 uniform vec2 u_grid_size; // Tamaño del grid
 
+uniform float u_refractory_period; // Periodo refractario, si es 2, dos pasos, si es 10, diez pasos...
+uniform int u_threshold; // Umbral para excitacion desde el estado de reposo
+
+const float epsilon = 10e-6; // Valor pequeño, para tener cierta tolerancia en comparaciones de punto flotante. QUIZAS DA PROBLEMAS
+
 
 void main(){
 
     vec4 current_state_data = texture(u_state_texture, TexCoords);
-    // Mapear los valores del canal rojo de [0,1] a los estados del modelo:
-    // 0.0 -> -1.0 (Refractario)
-    // 0.5 ->  0.0 (Reposo)
-    // 1.0 ->  1.0 (Excitado)
-    float v_norm = current_state_data.r;
-    float v = round(v_norm * 2.0 - 1.0); // Asegurarse de que es -1, 0, o 1
+    float v = current_state_data.r; // Asegurarse de que es -1, 0, o 1
 
     float is_blocked = current_state_data.b; // Canal azul indica si la celda esta bloqueada
-    vec2 pixel_step = 1.0 / u_grid_size;
-
-    float v_new;
-    float E;
-    float D; // Término de difusión
-
-    // Calcular E(v) basado en el modelo de tres estados (E(0)=0, E(-1)=0, E(1)=-1)
-    if (v == 1.0){ // Si está en estado excitado (1)
-        E = -1.0;
-    } else { // Si está en estado de reposo (0) o refractario (-1)
-        E = 0.0;
-    }
-
-    // Término de difusión
-    D = 0.0; // Inicializar D a 0
-
-    if (v == 0.0) { // SOLO aplicar difusión si la celda actual está en estado de reposo (0)
-        // Verificar vecinos inmediatos (no diagonales)
-        vec2 neighbors_coords[4];
-        neighbors_coords[0] = TexCoords + vec2(0.0, pixel_step.y);    // Arriba
-        neighbors_coords[1] = TexCoords + vec2(0.0, -pixel_step.y);   // Abajo
-        neighbors_coords[2] = TexCoords + vec2(pixel_step.x, 0.0);    // Derecha
-        neighbors_coords[3] = TexCoords + vec2(-pixel_step.x, 0.0);   // Izquierda
-
-        float excited_neighbor_found = 0.0; // Será 1.0 si algún vecino está excitado, 0.0 de lo contrario
-
-        for (int k = 0; k < 4; k++) {
-
-            vec2 nc = neighbors_coords[k];
-
-            if (nc.x < 0.0 || nc.x > 1.0 || nc.y < 0.0 || nc.y > 1.0) {
-                continue; // Saltar vecinos fuera de los límites
-            }
-
-            float neigh_v_norm = texture(u_state_texture, neighbors_coords[k]).r;
-            float neigh_v = round(neigh_v_norm * 2.0 - 1.0); // Obtener el estado real del vecino (-1, 0, 1)
-            if (neigh_v == 1.0) { // Si un vecino está en estado excitado (1)
-                excited_neighbor_found = 1.0;
-                break; // Encontró un vecino excitado, no necesita revisar otros
-            }
-        }
-        D = excited_neighbor_found; // D es 1.0 si existe un vecino excitado, 0.0 de lo contrario
-    }
-
 
     if (is_blocked > 0.5){
-        // Celda bloqueada, no se cambia su estado (permanece azul en el shader de display)
-        // Mantener su valor de estado actual para evitar la propagación a través de ella.
-        // Mapearemos el valor actual de v de nuevo a v_mapped
-        FragColor = vec4(v_norm, v_norm, 1.0, 1.0); // Mantener R y G, establecer B a 1.0 (bloqueado)
+        FragColor = current_state_data; // Mantener el estado actual si está bloqueado
         return;
     }
 
-    // Calcular el nuevo estado u^{n+1} = E(u^n) + D
-    v_new = E + D;
+    float v_new = 0.0;
 
-    // Mapear el valor del modelo de nuevo a [0,1] para almacenamiento en textura.
-    // -1 -> 0.0
-    //  0 -> 0.5
-    //  1 -> 1.0
-    float v_mapped = (v_new + 1.0) * 0.5;
+    // Logica general del modelo de Greenberg-Hastings
+    // Si v == 1, excitado (solo durante un paso)
+    // Si v == 0, reposo
+    // Si 0 < v < 1, refractario (durante el numero de pasos definido por u_refractory_period)
 
-    // Salida del nuevo estado y mantener el estado de bloqueo
-    FragColor = vec4(v_mapped, v_mapped, is_blocked, 1.0);
+    if (v > epsilon){
+        // Estado excitado o refractario, debe bajar a 0 gradualmente
+        float decay = 1.0 / u_refractory_period;
+        v_new = v - decay; // Disminuir el valor de v en cada paso
+
+        if (v_new < 0.0){
+            v_new = 0.0; // Asegurarse de que no baje de 0
+        }
+
+    }else{// Estado de reposo, verificar vecinos para posible excitacion
+        vec2 pixel_step = 1.0 / u_grid_size;
+
+        vec2 neighbors[8];
+
+        neighbors[0] = vec2(0.0, pixel_step.y); // Arriba
+        neighbors[1] = vec2(0.0, -pixel_step.y); // Abajo
+        neighbors[2] = vec2(pixel_step.x, 0.0); // Derecha
+        neighbors[3] = vec2(-pixel_step.x, 0.0); // Izquierda
+        neighbors[4] = vec2(pixel_step.x, pixel_step.y); // Arriba-Derecha
+        neighbors[5] = vec2(-pixel_step.x, pixel_step.y); // Arriba-Izquierda
+        neighbors[6] = vec2(pixel_step.x, -pixel_step.y); // Abajo-Derecha
+        neighbors[7] = vec2(-pixel_step.x, -pixel_step.y); // Abajo-Izquierda
+
+        int excited_neighbors = 0;
+
+        for (int i = 0; i < 8; i++){
+            vec2 neighbor_coords = TexCoords + neighbors[i];
+
+            // Asegurarse de que las coordenadas del vecino estén dentro de los límites
+            if (neighbor_coords.x < 0.0 || neighbor_coords.x > 1.0 || neighbor_coords.y < 0.0 || neighbor_coords.y > 1.0){
+                continue; // Saltar vecinos fuera de los límites
+            }
+
+            float neighbor_v = texture(u_state_texture, neighbor_coords).r;
+
+            if (neighbor_v > 1.0 - epsilon){ // Si el vecino está en estado excitado (1)
+                excited_neighbors += 1;
+            }
+        }
+
+        if (excited_neighbors >= int(u_threshold)){
+            v_new = 1.0; // Excitar la celda
+        }else{
+            v_new = 0.0; // Mantener en reposo
+        }
+    }
+
+    FragColor = vec4(v_new, v_new, is_blocked, 1.0); // Canal rojo para el estado, verde y azul en 0, alfa en 1
+
+    
 }

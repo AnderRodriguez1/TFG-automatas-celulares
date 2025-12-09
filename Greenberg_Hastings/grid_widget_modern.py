@@ -173,9 +173,15 @@ class GridWidget(QOpenGLWidget):
 
     def run_init_shader(self):
         """
-        Funcion para ejecutar el shader de inicializacion con las condiciones de Figure 2 del paper.
-        Lines are placed in the middle of the y-axis, starting from center_x and extending right.
+        Funcion para ejecutar el shader de inicializacion.
         """
+        self._init_random_pattern()
+
+    def _init_replicate_pattern(self):
+        """
+        Funcion para generar el patron replicando el paper de greenberg-hastings
+        """
+
         self.makeCurrent()
         try:
             rgba_grid = np.zeros((self.config.grid_height, self.config.grid_width, 4), dtype='f4')
@@ -212,7 +218,29 @@ class GridWidget(QOpenGLWidget):
             self.current_texture_idx = dest_idx
         finally:
             self.doneCurrent()
+    
+    def _init_random_pattern(self):
+        """
+        Funcion para generar un patron aleatorio
+        """
 
+        self.makeCurrent()
+        try:
+            rgba_grid = np.zeros((self.config.grid_height, self.config.grid_width, 4), dtype='f4')
+
+            # Generar estados aleatorios entre 0, 0.5 y 1.0
+            random_states = np.random.choice([0.0, 0.5, 1.0], size=(self.config.grid_height, self.config.grid_width))
+
+            rgba_grid[..., 0] = random_states  # Canal rojo para el estado
+            rgba_grid[..., 3] = 1.0 # Canal alfa
+
+            dest_idx = 1 - self.current_texture_idx
+            self.textures[dest_idx].write(rgba_grid.tobytes(), alignment=1)
+            self.current_texture_idx = dest_idx
+
+        finally:
+            self.doneCurrent()
+    
     def run_neuron_shader(self):
         """
         Funcion para ejecutar el shader de la neurona
@@ -228,6 +256,8 @@ class GridWidget(QOpenGLWidget):
 
             self.textures[source_idx].use(location=0)
             self.neuron_program['u_state_texture'].value = 0
+            self.neuron_program['u_threshold'].value = 1
+            self.neuron_program['u_refractory_period'].value = 15
 
             self.neuron_vao.render(moderngl.TRIANGLES)
             self.current_texture_idx = dest_idx
