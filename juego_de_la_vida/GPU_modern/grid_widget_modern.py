@@ -2,6 +2,7 @@ from _ctypes import alignment
 from pathlib import Path
 from PySide6 import QtWidgets, QtCore
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
+from PySide6.QtCore import Signal
 import numpy as np
 import moderngl
 from config_modern import Config
@@ -9,6 +10,7 @@ from PIL import Image
 import numpy as np
 import os
 from pathlib import Path
+import csv
 
 def load_shader_source(shader_file: str) -> str:
     """
@@ -22,6 +24,9 @@ def load_shader_source(shader_file: str) -> str:
         raise FileNotFoundError(f"Error Crítico: No se pudo encontrar el archivo de shader: {shader_path}")
 
 class GridWidget(QOpenGLWidget):
+
+    live_count_changed = Signal(int)
+
     def __init__(self, config: Config):
         super().__init__()
         self.config = config
@@ -50,8 +55,16 @@ class GridWidget(QOpenGLWidget):
         self.survive_rule = self.config.survive
         self.birth_rule = self.config.birth
         self.save_csv_bool = self.config.save_csv
+        self.density = self.config.density
+        self.height = self.config.grid_height
+        self.width = self.config.grid_width
+
+        if self.save_csv_bool:
+            self.csv_filename = self.config.csv_filename
 
         self._is_initialized = False
+
+        self.iteration_count = 0
 
     def initializeGL(self):
         """
@@ -140,6 +153,25 @@ class GridWidget(QOpenGLWidget):
 
     def restart_grid(self):
         self.run_init_shader()
+
+        if self.save_csv_bool:
+            self.iteration_count = 0
+
+            if not os.path.exists(self.csv_filename):
+                try:
+                    with open(self.csv_filename, mode='w', newline='') as file:
+                        writer = csv.writer(file)
+                        writer.writerow(['Height', 'Width', 'Density', 'Survive', 'Birth', 'Iteration', 'Live Cells'])
+                except Exception as e:
+                    print(f"Error al crear el archivo CSV: {e}")
+                    return
+
+            initial_data = self.textures[self.current_texture_idx].read(alignment=1)
+            float_array = np.frombuffer(initial_data, dtype=np.float32)
+            initial_live_count = int(np.sum(float_array[::4] > 0.5))  # Contar células vivas en el canal R
+            self._write_count_to_csv(initial_live_count)
+            self.live_count_changed.emit(initial_live_count)
+
         self.update()
 
     def flip_cell(self, x, y):
@@ -215,10 +247,24 @@ class GridWidget(QOpenGLWidget):
 
             self.ctx.finish()
 
+            if self.save_csv_bool:
+                dest_texture = self.textures[dest_idx]
+                raw_data = dest_texture.read(alignment=1)
+                float_array = np.frombuffer(raw_data, dtype=np.float32)
+                live_count = int(np.sum(float_array[::4] > 0.5))  # Contar células vivas en el canal R
+                self.iteration_count += 1
+                self._write_count_to_csv(live_count)
+                self.live_count_changed.emit(live_count)
+
             self.current_texture_idx = dest_idx
 
         finally:
             self.doneCurrent()
+
+    def _write_count_to_csv(self, count: int):
+        with open(self.csv_filename, mode='a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow([self.height, self.width, self.density, self.survive_rule, self.birth_rule, self.iteration_count, count])
 
     def wheelEvent(self, event):
         """

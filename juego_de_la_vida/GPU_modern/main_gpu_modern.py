@@ -12,7 +12,7 @@ if __name__ == "__main__":
         config = config_tab.get_config()
 
         window = MainWindow(config=config)
-        window.resize(800, 800)
+        window.resize(800, 750)
         window.show()
 
         sys.exit(app.exec())
