@@ -47,6 +47,10 @@ class GridWidget(QOpenGLWidget):
         self.panning = False
         self.last_pan_pos = QtCore.QPointF()
 
+        self.survive_rule = self.config.survive
+        self.birth_rule = self.config.birth
+        self.save_csv_bool = self.config.save_csv
+
         self._is_initialized = False
 
     def initializeGL(self):
@@ -203,6 +207,9 @@ class GridWidget(QOpenGLWidget):
 
             self.textures[source_idx].use(location=0)
             self.life_program['u_state_texture'].value = 0
+
+            self.life_program['u_survive'].value = self.survive_rule
+            self.life_program['u_birth'].value = self.birth_rule
 
             self.life_vao.render(moderngl.TRIANGLES)
 

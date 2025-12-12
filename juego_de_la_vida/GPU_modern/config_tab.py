@@ -24,13 +24,13 @@ class ConfigTab(QtWidgets.QDialog):
         self.width_spinbox.setRange(2, 1000)
         self.width_spinbox.setValue(config_to_use.grid_width)
 
-        self.density_slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.density_slider.setRange(0, 100)
-        self.density_slider.setValue(config_to_use.density * 100)
-        self.density_label = QtWidgets.QLabel(f"{self.density_slider.value()}%")
-        self.density_slider.valueChanged.connect(lambda val: self.density_label.setText(f"{val}%"))
+        self.density_spinbox = QtWidgets.QSpinBox()
+        self.density_spinbox.setRange(0, 100)
+        self.density_spinbox.setValue(config_to_use.density * 100)
+        self.density_label = QtWidgets.QLabel(f"{self.density_spinbox.value()}%")
+        self.density_spinbox.valueChanged.connect(lambda val: self.density_label.setText(f"{val}%"))
         self.density_layout = QtWidgets.QHBoxLayout()
-        self.density_layout.addWidget(self.density_slider)
+        self.density_layout.addWidget(self.density_spinbox)
         self.density_layout.addWidget(self.density_label)
 
         self.speed_spinbox = QtWidgets.QSpinBox()
@@ -38,10 +38,25 @@ class ConfigTab(QtWidgets.QDialog):
         self.speed_spinbox.setValue(config_to_use.speed)
         self.speed_spinbox.setSuffix(" Generaciones/segundo")
 
+        self.survive_spinbox = QtWidgets.QSpinBox()
+        self.survive_spinbox.setRange(0, 8)
+        self.survive_spinbox.setValue(config_to_use.survive)
+
+        self.birth_spinbox = QtWidgets.QSpinBox()
+        self.birth_spinbox.setRange(0, 8)
+        self.birth_spinbox.setValue(config_to_use.birth)
+
+        self.save_csv_checkbox = QtWidgets.QCheckBox()
+        self.save_csv_checkbox.setChecked(config_to_use.save_csv)
+
         form_layout.addRow("Alto de la red:", self.height_spinbox)
         form_layout.addRow("Ancho de la red:", self.width_spinbox)
         form_layout.addRow("Densidad inicial:", self.density_layout)
         form_layout.addRow("Velocidad inicial:", self.speed_spinbox)
+        form_layout.addRow("Vecinos vivos para sobrevivir:", self.survive_spinbox)
+        form_layout.addRow("Vecinos vivos para nacer:", self.birth_spinbox)
+        form_layout.addRow("Guardar datos en CSV:", self.save_csv_checkbox)
+
 
         layout.addLayout(form_layout)
 
@@ -56,8 +71,10 @@ class ConfigTab(QtWidgets.QDialog):
         """
 
         return Config(
-            grid_width=self.width_spinbox.value(),
-            grid_height=self.height_spinbox.value(),
-            initial_density=self.density_slider.value() / 100,
-            initial_speed=self.speed_spinbox.value()
+            grid_width = self.width_spinbox.value(),
+            grid_height = self.height_spinbox.value(),
+            initial_density = self.density_spinbox.value() / 100,
+            initial_speed = self.speed_spinbox.value(),
+            survive = self.survive_spinbox.value(),
+            birth = self.birth_spinbox.value()
         )

@@ -7,6 +7,8 @@ in vec2 TexCoords;
 // Parametros de entrada, se definen desde el programa principal
 uniform sampler2D u_state_texture; // Textura del estado actual
 uniform vec2 u_grid_size; // Tamaño del grid
+uniform int u_survive; // Numero de vecinos para sobrevivir
+uniform int u_birth; // Numero de vecinos para nacer
 
 void main(){
     vec2 pixel_step = 1.0 / u_grid_size; // Tamaño de un pixel respecto al tamaño del grid
@@ -32,13 +34,13 @@ void main(){
     float new_state = 0.0;
     // Logica de cambio de estado
     if (current_state > 0.5){// Si esta vivo
-        if (live_neighbors == 2 || live_neighbors == 3){// Si tiene 2 o 3 vecinos vivos, sigue vivo
+        if (live_neighbors == u_survive || live_neighbors == u_birth){// Si tiene 2 o 3 vecinos vivos, sigue vivo
             new_state = 1.0;
         }else{
             new_state = 0.3; // Muere, pero se ve gris para saber cuales han estado vivas en algún momento
         }
     }else{// Si esta muerto
-        if (live_neighbors == 3){// Si tiene exactamente 3 vecinos vivos, nace
+        if (live_neighbors == u_birth){// Si tiene exactamente 3 vecinos vivos, nace
             new_state = 1.0;
         } else if (current_state > 0.0){
             new_state = current_state;
