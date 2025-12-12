@@ -66,6 +66,15 @@ class GridWidget(QOpenGLWidget):
 
         self.iteration_count = 0
 
+        # Hay que usar el buffer para guardar los datos antes de escribirlos porque si no
+        # se tanquea el rendimiento al escribir en disco cada frame.
+        # Esto solo hace falta cuando se usa el codigo de automatizado de experimentos.
+        # OJO: como son datos de 1 y 0 no ocupan mucho espacio en la memoria
+        # pero hay que tener cuidado porque si se hacen muchos pasos o se aumenta
+        # el tamaño de la red puede crashear por falta de RAM.
+        self.csv_buffer = []
+        self.use_buffer_mode = False
+
     def initializeGL(self):
         """
         Funcion para inicializar OpenGL y los shaders
@@ -205,7 +214,6 @@ class GridWidget(QOpenGLWidget):
         self.makeCurrent()
         try:
             dest_idx = 1 - self.current_texture_idx
-            tex = self.textures[dest_idx] if dest_idx < len(self.textures) else None
             # Inicializar una matriz con 1 y 0 aleatorios segun la densidad
             initial_state = np.random.choice([0.0, 1.0], size=(self.config.grid_height, self.config.grid_width), 
                             p=[1 - self.config.density, self.config.density]).astype('f4')
@@ -262,10 +270,28 @@ class GridWidget(QOpenGLWidget):
             self.doneCurrent()
 
     def _write_count_to_csv(self, count: int):
+
+        if self.use_buffer_mode:
+            self.csv_buffer.append([
+                self.height, self.width, self.density, 
+                self.survive_rule, self.birth_rule, 
+                self.iteration_count, count
+            ])
+        else:
+            with open(self.csv_filename, mode='a', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow([self.height, self.width, self.density, self.survive_rule, self.birth_rule, self.iteration_count, count])
+
+    def flush_csv_buffer(self):
+        if not self.csv_buffer:
+            return
+
         with open(self.csv_filename, mode='a', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow([self.height, self.width, self.density, self.survive_rule, self.birth_rule, self.iteration_count, count])
-
+            writer.writerows(self.csv_buffer)
+        
+        self.csv_buffer.clear()
+    
     def wheelEvent(self, event):
         """
         Evento de rueda del raton para zoom 
