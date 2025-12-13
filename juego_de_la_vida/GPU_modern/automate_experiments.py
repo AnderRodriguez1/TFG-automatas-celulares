@@ -3,7 +3,7 @@ import sys
 import os
 import time
 import tqdm
-from PySide6 import QtWidgets, QtCore
+from PySide6 import QtWidgets
 import numpy as np
 
 from config_modern import Config
