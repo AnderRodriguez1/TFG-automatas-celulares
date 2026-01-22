@@ -1,3 +1,4 @@
+from numpy import dtype
 from _ctypes import alignment
 from pathlib import Path
 from PySide6 import QtWidgets, QtCore
@@ -48,6 +49,14 @@ class GridWidget(QOpenGLWidget):
 
         self._is_initialized = False
 
+        #Variables para el pegado de patrones
+        self.paste_program = None
+        self.paste_texture = None # Textura temporal para el patrón a pegar
+        self.is_pasting = False # Bandera para indicar si se está en modo pegado
+        self.paste_pos = QtCore.QPointF(0, 0) # Posición donde se pegará el patrón
+        self.paste_size = (0, 0) # Tamaño del patrón a pegar
+        self.setMouseTracking(True)
+
     def initializeGL(self):
         """
         Funcion para inicializar OpenGL y los shaders
@@ -60,11 +69,13 @@ class GridWidget(QOpenGLWidget):
             activate_cell_source = load_shader_source("shaders/activate_cell.glsl")
             neuron_source = load_shader_source("shaders/greenberg_h.glsl")
             block_source = load_shader_source("shaders/block_cell.glsl")
+            paste_source = load_shader_source("shaders/paste.glsl")
             # Crear los programas de shaders
             self.display_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=display_source)
             self.activate_cell_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=activate_cell_source)
             self.neuron_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=neuron_source)
             self.block_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=block_source)
+            self.paste_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=paste_source)
             # Crear los VAOs
             vertices = np.array([-1, -1, 1, -1, 1, 1, -1, 1], dtype='f4')
             indices = np.array([0, 1, 2, 0, 2, 3], dtype='i4')
@@ -76,6 +87,7 @@ class GridWidget(QOpenGLWidget):
             self.activate_cell_vao = self.ctx.vertex_array(self.activate_cell_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             self.neuron_vao = self.ctx.vertex_array(self.neuron_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             self.block_vao = self.ctx.vertex_array(self.block_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
+            self.paste_vao = self.ctx.vertex_array(self.paste_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             # Crear las texturas y FBOs
             for _ in range(2):
                 tex = self.ctx.texture((self.config.grid_width, self.config.grid_height), 4, dtype='f4')
@@ -110,6 +122,12 @@ class GridWidget(QOpenGLWidget):
         self.textures[self.current_texture_idx].use(location=0)
         self.display_program['u_state_texture'].value = 0
         self.display_vao.render(moderngl.TRIANGLES)
+
+        if self.is_pasting and self.paste_texture is not None:
+            self.ctx.enable(moderngl.BLEND)
+            self.ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+            pass
+            self.ctx.disable(moderngl.BLEND)
 
     def release_resources(self):
 
@@ -256,7 +274,7 @@ class GridWidget(QOpenGLWidget):
 
             self.textures[source_idx].use(location=0)
             self.neuron_program['u_state_texture'].value = 0
-            self.neuron_program['u_threshold'].value = 1
+            self.neuron_program['u_threshold'].value = 2
             self.neuron_program['u_refractory_period'].value = 15
 
             self.neuron_vao.render(moderngl.TRIANGLES)
@@ -313,6 +331,17 @@ class GridWidget(QOpenGLWidget):
         """
         Evento de pulsar un boton del raton
         """
+
+        if event.button() == QtCore.Qt.LeftButton and self.is_pasting:
+            self.apply_paste()
+            self.is_pasting = False
+            self.setCursor(QtCore.Qt.ArrowCursor)
+            if self.paste_texture:
+                self.paste_texture.release()
+                self.paste_texture = None
+            self.update()
+            return
+
         if event.button() == QtCore.Qt.LeftButton:
             grid_pos = self._pixel_to_grid(event.position())
             grid_x = int(grid_pos.x())
@@ -352,6 +381,14 @@ class GridWidget(QOpenGLWidget):
 
             self.update()
 
+        if self.is_pasting:
+            grid_pos = self._pixel_to_grid(event.position())
+            self.paste_pos = QtCore.QPointF(
+                grid_pos.x() - self.paste_size[0] / 2,
+                grid_pos.y() - self.paste_size[1] / 2
+            )
+            self.update()
+
     def mouseReleaseEvent(self, event):
         """
         Evento de soltar un boton del raton
@@ -360,6 +397,40 @@ class GridWidget(QOpenGLWidget):
             self.panning = False
             self.setCursor(QtCore.Qt.ArrowCursor)
         event.accept()
+
+    def apply_paste(self):
+        """
+        Aplica el patrón cargado en la posición actual de pegado
+        """
+        self.makeCurrent()
+
+        try:
+            source_idx = self.current_texture_idx
+            dest_idx = 1 - source_idx
+
+            self.fbos[dest_idx].use()
+
+            self.paste_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
+            self.paste_program['u_offset'].value = (self.paste_pos.x(), self.paste_pos.y())
+            self.paste_program['u_pattern_size'].value = (self.paste_size[0], self.paste_size[1])
+
+            self.textures[source_idx].use(location=0)
+            self.paste_program['u_state_texture'].value = 0
+
+            self.paste_texture.use(location=1)
+            self.paste_program['u_paste_pattern'].value = 1
+
+            self.paste_vao.render(moderngl.TRIANGLES)
+
+            self.current_texture_idx = dest_idx
+
+            print(f"Patrón pegado en posición: ({self.paste_pos.x()}, {self.paste_pos.y()})")
+        except Exception as e:
+            print(f"Error al aplicar el patrón pegado: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            self.doneCurrent()
 
     def _pixel_to_grid(self, pos):
         """
@@ -445,3 +516,46 @@ class GridWidget(QOpenGLWidget):
             self.doneCurrent()
 
             self.update()
+
+    def start_pasting_from_file(self, file_path: str):
+        """
+        Inicia el modo de pegado cargando un patrón desde un archivo
+        """
+        self.makeCurrent()
+        try:
+            image = Image.open(file_path)
+
+            data = np.array(image)
+            r, g, b, a = data.T
+            background_mask = (r < 50) & (g < 50) & (b < 50)
+
+            data[..., 3][background_mask.T] = 0
+
+            clean_image = Image.fromarray(data)
+            bbox = clean_image.getbbox()
+            if bbox:
+                cropped_image = clean_image.crop(bbox)
+            else:
+                print("La imagen está vacía o no tiene contenido válido para pegar.")
+                cropped_image = clean_image
+
+            cropped_image = cropped_image.transpose(method=Image.Transpose.FLIP_TOP_BOTTOM)
+            self.paste_size = cropped_image.size
+
+            img_data = np.array(cropped_image).astype('f4') / 255.0
+
+            if self.paste_texture:
+                self.paste_texture.release()
+
+            self.paste_texture = self.ctx.texture(self.paste_size, 4, data=img_data.tobytes(), dtype='f4')
+            self.paste_texture.filter = (moderngl.NEAREST, moderngl.NEAREST)
+            
+            self.is_pasting = True
+            self.setCursor(QtCore.Qt.CrossCursor)
+            print(f"Modo pegado iniciado, dimensiones del patrón: {self.paste_size}")
+
+        except Exception as e:
+            print(f"Error al iniciar el modo pegado: {e}")
+
+        finally:
+            self.doneCurrent()

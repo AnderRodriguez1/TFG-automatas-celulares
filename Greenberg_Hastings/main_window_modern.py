@@ -140,4 +140,4 @@ class MainWindow(QtWidgets.QMainWindow):
                         "Imagen PNG (*.png);;Imagen BMP (*.bmp);;Imagen JPEG (*.jpg *.jpeg);;Todos los archivos (*)")
 
         if file_path:
-            self.grid_widget.import_pattern(file_path)
+            self.grid_widget.start_pasting_from_file(file_path)

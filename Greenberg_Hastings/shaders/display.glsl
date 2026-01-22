@@ -9,18 +9,7 @@ uniform float u_zoom_level; // Nivel de zoom
 uniform vec2 u_view_offset; // Offset de la vista en coordenadas de celda
 uniform vec2 u_grid_size; // Tamaño del grid
 
-vec3 colormap(float value){
-    // Funcion para mapear los colores (puesto que los canales se usan para guardar informacion, 
-    // no se pueden usar directamente para colores, porque se veria feo)
-    // El mapeo va de azul oscuro (0.0) a amarillo(0.5) a blanco(1.0)
-    vec3 blue = vec3(0.0, 0.0, 0.5);
-    vec3 yellow = vec3(1.0, 1.0, 0.0);
-    vec3 white = vec3(1.0, 1.0, 1.0);
-
-    vec3 color = mix(blue, yellow, value*2.0);
-    color = mix(color, white, max(0.0, value - 0.5) * 2.0);
-    return color;
-}
+const float epsilon = 1e-6; 
 
 void main()
 {
@@ -41,13 +30,16 @@ void main()
 
     if (is_blocked > 0.5){
         // Si esta bloqueada
-        final_color = vec3(0.2, 0.5, 0.8); // Azul celeste para células bloqueadas
-    }else if (v <= 0.0){
-        // Si no esta bloqueada, pero esta totalmente apagada
-        final_color = vec3(0.0, 0.0, 0.0);
+        final_color = vec3(0.4, 0.4, 0.4); // Gris para células bloqueadas
+    }else if (v > 1.0 - epsilon){
+        // Celula activa
+        final_color = vec3(1.0, 1.0, 1.0);
+    }else if (v > epsilon){
+        // Celula refractaria
+        final_color = vec3(v, 0, 0);
     }else{
-        // No esta bloqueada y tiene voltaje
-        final_color = colormap(v);
+        // Celula inactiva
+        final_color = vec3(0.0, 0.0, 0.0);
     }
     
     // Calcular las coordenadas dentro de la celda para dibujar bordes
