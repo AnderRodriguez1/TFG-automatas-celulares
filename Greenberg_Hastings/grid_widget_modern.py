@@ -36,6 +36,8 @@ class GridWidget(QOpenGLWidget):
         self.activate_cell_vao = None
         self.neuron_vao = None
         self.block_vao = None
+        self.paste_vao = None
+        self.ghost_vao = None
         # FBOs y Texturas
         self.fbos = []
         self.textures = []
@@ -70,12 +72,14 @@ class GridWidget(QOpenGLWidget):
             neuron_source = load_shader_source("shaders/greenberg_h.glsl")
             block_source = load_shader_source("shaders/block_cell.glsl")
             paste_source = load_shader_source("shaders/paste.glsl")
+            ghost_source = load_shader_source("shaders/ghost.glsl")
             # Crear los programas de shaders
             self.display_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=display_source)
             self.activate_cell_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=activate_cell_source)
             self.neuron_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=neuron_source)
             self.block_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=block_source)
             self.paste_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=paste_source)
+            self.ghost_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=ghost_source)
             # Crear los VAOs
             vertices = np.array([-1, -1, 1, -1, 1, 1, -1, 1], dtype='f4')
             indices = np.array([0, 1, 2, 0, 2, 3], dtype='i4')
@@ -88,6 +92,7 @@ class GridWidget(QOpenGLWidget):
             self.neuron_vao = self.ctx.vertex_array(self.neuron_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             self.block_vao = self.ctx.vertex_array(self.block_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             self.paste_vao = self.ctx.vertex_array(self.paste_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
+            self.ghost_vao = self.ctx.vertex_array(self.ghost_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             # Crear las texturas y FBOs
             for _ in range(2):
                 tex = self.ctx.texture((self.config.grid_width, self.config.grid_height), 4, dtype='f4')
@@ -126,7 +131,18 @@ class GridWidget(QOpenGLWidget):
         if self.is_pasting and self.paste_texture is not None:
             self.ctx.enable(moderngl.BLEND)
             self.ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
-            pass
+
+            self.ghost_program['u_zoom_level'].value = self.zoom_level
+            self.ghost_program['u_view_offset'].value = (self.view_offset_x, self.view_offset_y)
+            self.ghost_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
+            self.ghost_program['u_pattern_size'].value = (self.paste_size[0], self.paste_size[1])
+            self.ghost_program['u_paste_pos'].value = (self.paste_pos.x(), self.paste_pos.y())
+
+            self.paste_texture.use(location=0)
+            self.ghost_program['u_paste_pattern'].value = 0
+
+            self.ghost_vao.render(moderngl.TRIANGLES)
+            
             self.ctx.disable(moderngl.BLEND)
 
     def release_resources(self):
@@ -194,6 +210,7 @@ class GridWidget(QOpenGLWidget):
         Funcion para ejecutar el shader de inicializacion.
         """
         self._init_random_pattern()
+        #self._init_replicate_pattern()
 
     def _init_replicate_pattern(self):
         """
@@ -205,8 +222,8 @@ class GridWidget(QOpenGLWidget):
             rgba_grid = np.zeros((self.config.grid_height, self.config.grid_width, 4), dtype='f4')
             
             # Todas las celdas en estado de reposo (u=0) y no bloqueadas (is_blocked=0)
-            rgba_grid[..., 0] = 0.5 # Canal rojo para el estado (0.5 representa el estado de reposo u=0)
-            rgba_grid[..., 1] = 0.5 # Canal verde para nada por ahora
+            rgba_grid[..., 0] = 0.0 # Canal rojo para el estado (0.5 representa el estado de reposo u=0)
+            rgba_grid[..., 1] = 0.0 # Canal verde para nada por ahora
             rgba_grid[..., 2] = 0.0 # Canal azul para 'is_blocked' (0.0 significa no bloqueado)
             rgba_grid[..., 3] = 1.0 # Canal alfa
 
@@ -223,7 +240,7 @@ class GridWidget(QOpenGLWidget):
             # u^0_{i,0} = -1 (Refractario) -> Valor mapeado 0.0
             # Esta línea comienza desde center_x y se extiende hacia la derecha (hasta grid_width-1)
             if refractory_row_idx >= 0 and refractory_row_idx < self.config.grid_height:
-                rgba_grid[refractory_row_idx, center_x:, 0] = 0.0 
+                rgba_grid[refractory_row_idx, center_x:, 0] = 0.5 
 
             # u^0_{i,1} = 1 (Excitado) -> Valor mapeado 1.0
             # Esta línea comienza desde center_x y se extiende hacia la derecha (hasta grid_width-1)
@@ -424,7 +441,6 @@ class GridWidget(QOpenGLWidget):
 
             self.current_texture_idx = dest_idx
 
-            print(f"Patrón pegado en posición: ({self.paste_pos.x()}, {self.paste_pos.y()})")
         except Exception as e:
             print(f"Error al aplicar el patrón pegado: {e}")
             import traceback
