@@ -295,6 +295,7 @@ class GridWidget(QOpenGLWidget):
             self.neuron_program['u_state_texture'].value = 0
             self.neuron_program['u_threshold'].value = self.config.threshold
             self.neuron_program['u_refractory_period'].value = self.config.refractory_period
+            self.neuron_program['u_neighborhood'].value = 0 if self.config.neighborhood == 'Moore (8)' else 1
 
             self.neuron_vao.render(moderngl.TRIANGLES)
             self.current_texture_idx = dest_idx
@@ -314,7 +315,6 @@ class GridWidget(QOpenGLWidget):
 
             self.block_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
             self.block_program['u_block_coord'].value = (x, y)
-
             self.textures[source_idx].use(location=0)
             self.block_program['u_state_texture'].value = 0
 

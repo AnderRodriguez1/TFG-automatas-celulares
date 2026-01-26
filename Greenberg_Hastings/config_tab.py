@@ -61,6 +61,10 @@ class ConfigTab(QtWidgets.QDialog):
         self.refractory_period_spinbox.setSuffix(" Iteraciones")
         self.refractory_period_title_label = QtWidgets.QLabel("Periodo refractario:")
 
+        self.neighborhood_combo = QtWidgets.QComboBox()
+        self.neighborhood_combo.addItems(['Moore (8)', 'Von Neumann (4)'])
+        self.neighborhood_combo.setCurrentText(config_to_use.neighborhood)
+
         form_layout.addRow("Alto de la red:", self.height_spinbox)
         form_layout.addRow("Ancho de la red:", self.width_spinbox)
         form_layout.addRow("Patrón inicial:", self.init_pattern_combo)
@@ -70,6 +74,7 @@ class ConfigTab(QtWidgets.QDialog):
         form_layout.addRow("Velocidad inicial:", self.speed_spinbox)
         form_layout.addRow(self.threshold_title_label, self.threshold_spinbox)
         form_layout.addRow(self.refractory_period_title_label, self.refractory_period_spinbox)
+        form_layout.addRow("Vecindario:", self.neighborhood_combo)
         layout.addLayout(form_layout)
 
         button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Ok | QtWidgets.QDialogButtonBox.StandardButton.Cancel)
@@ -102,5 +107,6 @@ class ConfigTab(QtWidgets.QDialog):
             initial_speed=self.speed_spinbox.value(),
             init_pattern=self.init_pattern_combo.currentText(), 
             refractory_period=self.refractory_period_spinbox.value(),
-            threshold=self.threshold_spinbox.value()
+            threshold=self.threshold_spinbox.value(),
+            neighborhood=self.neighborhood_combo.currentText()
         )

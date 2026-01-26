@@ -10,6 +10,7 @@ uniform vec2 u_grid_size; // Tamaño del grid
 
 uniform float u_refractory_period; // Periodo refractario, si es 2, dos pasos, si es 10, diez pasos...
 uniform int u_threshold; // Umbral para excitacion desde el estado de reposo
+uniform int u_neighborhood; // Tipo de vecindario: 0 para Moore, 1 para Von Neumann
 
 const float epsilon = 10e-6; // Valor pequeño, para tener cierta tolerancia en comparaciones de punto flotante. QUIZAS DA PROBLEMAS
 
@@ -51,10 +52,17 @@ void main(){
         neighbors[1] = vec2(0.0, -pixel_step.y); // Abajo
         neighbors[2] = vec2(pixel_step.x, 0.0); // Derecha
         neighbors[3] = vec2(-pixel_step.x, 0.0); // Izquierda
-        neighbors[4] = vec2(pixel_step.x, pixel_step.y); // Arriba-Derecha
-        neighbors[5] = vec2(-pixel_step.x, pixel_step.y); // Arriba-Izquierda
-        neighbors[6] = vec2(pixel_step.x, -pixel_step.y); // Abajo-Derecha
-        neighbors[7] = vec2(-pixel_step.x, -pixel_step.y); // Abajo-Izquierda
+        if (u_neighborhood == 0){ // Vecindario de Moore
+            neighbors[4] = vec2(pixel_step.x, pixel_step.y); // Arriba-Derecha
+            neighbors[5] = vec2(-pixel_step.x, pixel_step.y); // Arriba-Izquierda
+            neighbors[6] = vec2(pixel_step.x, -pixel_step.y); // Abajo-Derecha
+            neighbors[7] = vec2(-pixel_step.x, -pixel_step.y); // Abajo-Izquierda
+        }else{ // Vecindario de Von Neumann
+            neighbors[4] = vec2(0.0, 0.0); // No usar
+            neighbors[5] = vec2(0.0, 0.0); // No usar
+            neighbors[6] = vec2(0.0, 0.0); // No usar
+            neighbors[7] = vec2(0.0, 0.0); // No usar
+            }
 
         int excited_neighbors = 0;
 

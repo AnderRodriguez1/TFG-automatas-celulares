@@ -17,4 +17,4 @@ class Config:
         self.init_pattern = init_pattern
         self.refractory_period = refractory_period
         self.threshold = threshold
-        #self.neighborhood = neighborhood
+        self.neighborhood = neighborhood
