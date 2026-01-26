@@ -209,8 +209,10 @@ class GridWidget(QOpenGLWidget):
         """
         Funcion para ejecutar el shader de inicializacion.
         """
-        self._init_random_pattern()
-        #self._init_replicate_pattern()
+        if self.config.init_pattern == 'Aleatorio':
+            self._init_random_pattern()
+        elif self.config.init_pattern == 'Patrón GH':
+            self._init_replicate_pattern()
 
     def _init_replicate_pattern(self):
         """
@@ -291,8 +293,8 @@ class GridWidget(QOpenGLWidget):
 
             self.textures[source_idx].use(location=0)
             self.neuron_program['u_state_texture'].value = 0
-            self.neuron_program['u_threshold'].value = 2
-            self.neuron_program['u_refractory_period'].value = 15
+            self.neuron_program['u_threshold'].value = self.config.threshold
+            self.neuron_program['u_refractory_period'].value = self.config.refractory_period
 
             self.neuron_vao.render(moderngl.TRIANGLES)
             self.current_texture_idx = dest_idx
