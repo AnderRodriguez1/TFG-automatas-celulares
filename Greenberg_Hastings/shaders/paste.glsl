@@ -28,7 +28,7 @@ void main(){
             return;
         }
 
-        if (visual_color.r > 0.5 && visual_color.b > 0.5){
+        if (visual_color.r > 0.8){
             // Celda activa 
             FragColor = vec4(1.0, 0.0, 0.0, 1.0); // Estado activo
         }else{

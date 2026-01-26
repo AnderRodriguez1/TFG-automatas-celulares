@@ -568,7 +568,7 @@ class GridWidget(QOpenGLWidget):
             
             self.is_pasting = True
             self.setCursor(QtCore.Qt.CrossCursor)
-            print(f"Modo pegado iniciado, dimensiones del patrón: {self.paste_size}")
+            #print(f"Modo pegado iniciado, dimensiones del patrón: {self.paste_size}")
 
         except Exception as e:
             print(f"Error al iniciar el modo pegado: {e}")
