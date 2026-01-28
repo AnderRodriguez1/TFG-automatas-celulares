@@ -16,7 +16,7 @@ void main(){
     if (int(current_grid_coord.x) == int(u_block_coord.x) && int(current_grid_coord.y) == int(u_block_coord.y)){
         // Si la celda coincide con la que se ha pulsado
         if (current_state.b <= 0.5){
-            // Si la celda no esta bloqueada (canal azul <= 0.5), bloquearla
+            // Celda no bloqueada, bloquearla 
             FragColor = vec4(current_state.r, current_state.g, 1.0, 1.0);
         }else{
             // Si la celda esta bloqueada, desbloquearla

@@ -29,8 +29,12 @@ void main()
     vec3 final_color;
 
     if (is_blocked > 0.5){
-        // Si esta bloqueada
-        final_color = vec3(0.4, 0.4, 0.4); // Gris para células bloqueadas
+        if (v > 1.0 - epsilon){
+            final_color = vec3(0.92, 0.0, 1.0); // Magenta para celulas activas bloqueadas (reflectores)
+        }else{
+            // Si la celula esta inactiva, se bloquea
+            final_color = vec3(0.4, 0.4, 0.4); // Gris para células bloqueadas
+        }
     }else if (v > 1.0 - epsilon){
         // Celula activa
         final_color = vec3(1.0, 1.0, 1.0);

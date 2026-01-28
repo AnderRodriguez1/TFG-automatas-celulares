@@ -266,7 +266,7 @@ class GridWidget(QOpenGLWidget):
             rgba_grid = np.zeros((self.config.grid_height, self.config.grid_width, 4), dtype='f4')
 
             # Generar estados aleatorios entre 0, 0.5 y 1.0
-            random_states = np.random.choice([0.0, 0.5, 1.0], size=(self.config.grid_height, self.config.grid_width))
+            random_states = np.random.choice([0.0, 0.5, 1.0], size=(self.config.grid_height, self.config.grid_width), p=[(1-self.config.density)/2, (1-self.config.density)/2, self.config.density])
 
             rgba_grid[..., 0] = random_states  # Canal rojo para el estado
             rgba_grid[..., 3] = 1.0 # Canal alfa
