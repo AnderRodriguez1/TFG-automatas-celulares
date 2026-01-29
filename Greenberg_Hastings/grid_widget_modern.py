@@ -8,6 +8,7 @@ import moderngl
 from config_modern import Config
 from PIL import Image
 import numpy as np
+import csv
 
 def load_shader_source(shader_file: str) -> str:
     """
@@ -577,3 +578,51 @@ class GridWidget(QOpenGLWidget):
 
         finally:
             self.doneCurrent()
+
+    def init_csv_buffer(self):
+        """
+        Inicializa el buffer para guardar datos CSV
+        """
+        self.csv_buffer = []
+        self.csv_buffer.append(['Step', 'Active_cells', 'Refractory_cells', 'Resting_cells'])
+
+    def capture_step_data(self, step_index):
+        """
+        Captura los datos del paso actual para el CSV
+        """
+        if not self.ctx:
+            return
+        self.makeCurrent()
+        try:
+            raw_data = self.textures[self.current_texture_idx].read(alignment=1)
+
+            data_np = np.frombuffer(raw_data, dtype=np.float32)
+
+            states = data_np[0::4]
+
+            active_count = np.sum(states == 1.0)
+            refractory_count = np.sum((states > 0.0) & (states < 1.0))
+
+            total_cells = self.config.grid_width * self.config.grid_height
+            resting_count = total_cells - active_count - refractory_count
+
+            self.csv_buffer.append([step_index, active_count, refractory_count, resting_count])
+        except Exception as e:
+            print(f"Error al capturar datos del paso {step_index}: {e}")
+        finally:
+            self.doneCurrent()
+
+    def flush_csv_buffer(self, file_path: str):
+        """
+        Escribe el buffer CSV al archivo
+        """
+        try:
+            import os
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+            with open(file_path, mode='w', newline='') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerows(self.csv_buffer)
+        
+        except Exception as e:
+            print(f"Error al guardar el archivo CSV: {e}")
