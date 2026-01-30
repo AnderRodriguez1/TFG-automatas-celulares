@@ -13,7 +13,7 @@ NUM_STEPS = 1000
 
 INITIAL_DENSITY = 0.15
 
-REFRACTORY_PERIODS = [i for i in range(0, 100)]
+REFRACTORY_PERIODS = np.linspace(1, 100, 100, dtype=int)
 
 def run_batch_simulation():
 
