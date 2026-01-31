@@ -38,6 +38,9 @@ def run_batch_simulation():
 
     widget = GridWidget(config=config)
     widget.show()
+    app.processEvents()
+    time.sleep(0.1)
+    app.processEvents()
     widget.hide()  # Ocultar la ventana ya que no es necesaria
     widget.use_buffer_mode = True  # Activar el modo buffer para CSV
 
