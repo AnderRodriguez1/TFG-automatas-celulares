@@ -89,6 +89,10 @@ def plot_data_replicate():
         plt.title('Proporción de estados celulares a lo largo del tiempo', fontsize=14, fontweight='bold')
         plt.xlabel('Paso de tiempo')
         plt.ylabel('Proporción de células')
+        print(f"refractory_proportion[-1]: {refractory_proportion[-1]}")
+        print(f"inactive_proportion[-1]: {inactive_proportion[-1]}")
+        print(f"active_proportion[-1]: {active_proportion[-1]}")
+        print(f"shannon_entropy[-1]: {shannon_entropy[-1]}")
         plt.show()
 
 def main():

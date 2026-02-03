@@ -33,7 +33,6 @@ def run_batch_simulation():
 
     widget = GridWidget(config=config)
     
-    -
     widget.show()
     
     
