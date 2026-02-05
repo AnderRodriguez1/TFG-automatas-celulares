@@ -74,10 +74,11 @@ def plot_data_average(fit_bool=False):
         index = size / 100 - 1
         ax1.plot(periods, np.array(averages)+0.1*index, marker='o', linestyle='-', label=f'Tamaño {size_label}')
         
-        for point in averages:
-            if point == 0:
-                critical_periods[index] = periods[averages.index(point)]
-                break
+        for idx, avg in enumerate(averages):
+            if avg == 0:
+                if np.sum(averages[idx:]) == 0:
+                    critical_periods[size_label] = periods[idx]
+                    break
         
 
 
