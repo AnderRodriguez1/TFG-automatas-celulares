@@ -9,12 +9,12 @@ import numpy as np
 from config_modern import Config
 from grid_widget_modern import GridWidget
 
-NUM_STEPS = 1000
+NUM_STEPS = 2000
 
 INITIAL_DENSITY = 0.15
 
 REFRACTORY_PERIODS = np.linspace(1, 100, 100, dtype=int)
-GRID_SIZES = np.linspace(100, 1000, 10, dtype=int)
+GRID_SIZES = np.linspace(100, 2000, 20, dtype=int)
 
 def run_batch_simulation():
 
