@@ -137,22 +137,38 @@ def compare_critical_periods():
                 aggregated_data[size] = []
             aggregated_data[size].append(critical_periods[size_label])
 
-        plt.plot(size_numeric, critical_periods.values(), marker='o', linestyle='-', label=f'{round}', alpha=0.5)
+        #plt.plot(size_numeric, critical_periods.values(), marker='o', linestyle='-', label=f'{round}', alpha=0.5)
 
     if aggregated_data:
         final_sizes = sorted(aggregated_data.keys())
         final_averages = []
+        final_averages_std = []
 
         for size in final_sizes:
             mean_val = np.mean(aggregated_data[size])
             final_averages.append(mean_val)
-        plt.plot(np.array(final_sizes) / 100, final_averages, marker='x', linestyle='--', color='red', label='Promedio de períodos críticos')
+            std_val = np.std(aggregated_data[size])
+            final_averages_std.append(std_val)
+
+        plt.errorbar(np.array(final_sizes) / 100, final_averages, yerr=final_averages_std, fmt='o', 
+        color='red', ecolor='black', elinewidth=1.5, capsize=4, label='Promedio $\pm \sigma$')
+
+        fit_params = curve_fit(fss_function, np.array(final_sizes) / 100, final_averages, maxfev=10000)
+        fit_curve = fss_function(np.linspace(np.min(final_sizes) / 100, np.max(final_sizes) / 100, 100), *fit_params[0])
+
+        print(f"Parámetros de ajuste FSS: {fit_params[0]}")
+        plt.plot(np.linspace(np.min(final_sizes) / 100, np.max(final_sizes) / 100, 100), fit_curve, color='green', label='Curva ajustada')
 
     plt.title('Proporción promedio de células activas en función del período refractario', fontsize=18, fontweight='bold')
-    plt.xlabel('Tamaño del grid (en cientos)', fontsize=14)
+    plt.xlabel('Tamaño del grid (en cientos, escala logarítmica)', fontsize=14)
     plt.ylabel('Periodo refractario crítico', fontsize=14)
+    plt.xscale('log')
+    custom_ticks = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    plt.xticks(custom_ticks, custom_ticks)
+    from matplotlib.ticker import ScalarFormatter
+    plt.gca().xaxis.set_major_formatter(ScalarFormatter())
     plt.grid(True)
-    plt.legend(title='Test run', fontsize=12)
+    plt.legend(fontsize=12)
     plt.tight_layout()
     plt.show()
 
@@ -168,13 +184,13 @@ def plot_individual_data(fit_bool=False):
 
     sorted_sizes = sorted(data_by_size.keys(), key=lambda x: int(x.split('x')[0]))
 
-    data = data_by_size[sorted_sizes[-1]]
+    data = data_by_size[sorted_sizes[4]]
     periods, averages = zip(*data)
     index = averages.index(0)
     clean_periods = periods[:index]
     clean_averages = averages[:index]
-    plt.plot(periods, np.array(averages), marker='o', linestyle='-', label=f'Tamaño {sorted_sizes[-1]}')
-    plt.plot(clean_periods, np.array(clean_averages), marker='x', label=f'Datos cortados')
+    plt.plot(periods, np.array(averages), marker='o', linestyle='-', label=f'Datos originales (tamaño {sorted_sizes[4]})')
+    plt.plot(clean_periods, np.array(clean_averages), marker='x', label=f'Datos ajustados (hasta período crítico)')
 
 
     if fit_bool:
@@ -182,8 +198,8 @@ def plot_individual_data(fit_bool=False):
 
             fit_params = curve_fit(curve_fit_function, clean_periods, clean_averages, maxfev=10000)
             fit_curve = curve_fit_function(np.array(periods), *fit_params[0])
-            print(f"Parámetros de ajuste: a={fit_params[0][0]}, b={fit_params[0][1]}, c={fit_params[0][2]}, d={fit_params[0][3]}")
-            plt.plot(periods, fit_curve, linestyle='--', color='red', label='Ajuste de curva')
+            print(f"Parámetros de ajuste: {fit_params[0]}")
+            plt.plot(periods, fit_curve, linestyle='--', color='red', label='Curva ajustada')
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -194,7 +210,8 @@ def plot_individual_data(fit_bool=False):
     plt.xlabel('Período refractario', fontsize=14)
     plt.ylabel('Proporción promedio de células activas (últimos 100 pasos)', fontsize=14)
     plt.grid(True)
-    plt.legend(title='Tamaños de grid')
+    plt.legend(fontsize=12)
+    plt.tight_layout()
     plt.show()
 
 def select_general_folder():
@@ -248,15 +265,18 @@ def plot_data_replicate():
         print(f"shannon_entropy[-1]: {shannon_entropy[-1]}")
         plt.show()
 
-def curve_fit_function(x, a, b, c, d):
-    return a * np.exp(-b * x ** c) + d
+def curve_fit_function(x, a, b, c):
+    return a * (x**(-b)) * np.exp(-x/c)
+
+def fss_function(x, a, b, c):
+    return a - b * (x**(-c))
 
 def main():
     app = QtWidgets.QApplication([])
     #plot_data_average(fit_bool=True)
     #plot_data_replicate()
-    compare_critical_periods()
-    #plot_individual_data(fit_bool=True)
+    #compare_critical_periods()
+    plot_individual_data(fit_bool=True)
 
 if __name__=="__main__":
     main()

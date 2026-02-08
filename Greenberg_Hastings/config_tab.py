@@ -17,11 +17,11 @@ class ConfigTab(QtWidgets.QDialog):
         config_to_use = actual_config if actual_config else Config()
 
         self.height_spinbox = QtWidgets.QSpinBox()
-        self.height_spinbox.setRange(2, 1000)
+        self.height_spinbox.setRange(2, 5000)
         self.height_spinbox.setValue(config_to_use.grid_height)
 
         self.width_spinbox = QtWidgets.QSpinBox()
-        self.width_spinbox.setRange(2, 1000)
+        self.width_spinbox.setRange(2, 5000)
         self.width_spinbox.setValue(config_to_use.grid_width)
 
         self.init_pattern_combo = QtWidgets.QComboBox()
