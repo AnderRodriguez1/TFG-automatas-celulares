@@ -82,6 +82,7 @@ class GridWidget(QOpenGLWidget):
                 tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
                 self.textures.append(tex)
                 self.fbos.append(self.ctx.framebuffer(color_attachments=[tex]))
+            self.noise_texture = self.ctx.texture((self.config.grid_width, self.config.grid_height), 4, dtype='f4')
             QtCore.QTimer.singleShot(0, self.perform_initial_render)
         except Exception as e:
             print(f"Error durante la inicialización de OpenGL: {e}")
@@ -109,7 +110,7 @@ class GridWidget(QOpenGLWidget):
         self.display_program['u_state_texture'].value = 0
         self.display_vao.render(moderngl.TRIANGLES)
 
-    def release_resources(self):
+    def _release_resources(self):
 
         #print("Liberando recursos de ModernGL...")
         self.makeCurrent()
@@ -136,12 +137,14 @@ class GridWidget(QOpenGLWidget):
                 self.block_vao.release()
             if self.ctx: 
                 self.ctx.release()
+            if self.noise_texture: 
+                self.noise_texture.release()
             #print("Recursos liberados.")
         finally:
             self.doneCurrent()
 
     def next_generation(self):
-        for _ in range(100):
+        for _ in range(10):
             self.run_fhn_shader()
         self.update()
 
@@ -185,10 +188,10 @@ class GridWidget(QOpenGLWidget):
 
             # Cuadrado del centro (valores sacados de "Pattern Formation of the FitzHugh-Nagumo Model:
             # Cellular Automata Approach")
-            u_spot = 0.75
+            u_spot = 0.9
             v_spot = 0.11
             
-            spot_size = 10 # Tamaño del cuadrado
+            spot_size = 30 # Tamaño del cuadrado
             # Inicializar con todo 0
             rgba_grid = np.zeros((self.config.grid_height, self.config.grid_width, 4), dtype='f4')
             rgba_grid[..., 0] = u_background
@@ -236,6 +239,12 @@ class GridWidget(QOpenGLWidget):
             # Enlazar la textura de origen
             self.textures[source_idx].use(location=0)
             self.fhn_program['u_state_texture'].value = 0
+
+            # Generar textura de ruido (distribución normal, media=0, std=0.01) y escribirla en la GPU
+            noise = np.random.randn(self.config.grid_height, self.config.grid_width, 4).astype('f4') * 0.01
+            self.noise_texture.write(noise.tobytes())
+            self.noise_texture.use(location=1)
+            self.fhn_program['u_noise_texture'].value = 1
             # Ejecutar el shader
             self.fhn_vao.render(moderngl.TRIANGLES)
             self.current_texture_idx = dest_idx

@@ -9,19 +9,6 @@ uniform float u_zoom_level; // Nivel de zoom
 uniform vec2 u_view_offset; // Offset de la vista en coordenadas de celda
 uniform vec2 u_grid_size; // Tamaño del grid
 
-vec3 colormap(float value){
-    // Funcion para mapear los colores (puesto que los canales se usan para guardar informacion, 
-    // no se pueden usar directamente para colores, porque se veria feo)
-    // El mapeo va de azul oscuro (0.0) a amarillo(0.5) a blanco(1.0)
-    vec3 blue = vec3(0.0, 0.0, 0.5);
-    vec3 yellow = vec3(1.0, 1.0, 0.0);
-    vec3 white = vec3(1.0, 1.0, 1.0);
-
-    vec3 color = mix(blue, yellow, value*2.0);
-    color = mix(color, white, max(0.0, value - 0.5) * 2.0);
-    return color;
-}
-
 void main()
 {
     // Calcular las coordenadas de muestreo teniendo en cuenta el zoom y el offset
@@ -35,20 +22,28 @@ void main()
 
     vec4 current_state = texture(u_state_texture, sample_coord); // Leer el estado actual de la celda
     float u = current_state.r; // Voltaje de la celda (canal rojo)
-    float u_norm = (u + 1.5) / 3.0; // Normalizar u a [0, 1] para el colormap
+    float u_norm = (u + 2) / 4.0; // Normalizar u a [0, 1] para el colormap
     float is_blocked = current_state.b; // Bloqueo de la celda (canal azul)
 
     vec3 final_color;
 
     if (is_blocked > 0.5){
         // Si esta bloqueada
-        final_color = vec3(0.2, 0.5, 0.8); // Azul celeste para células bloqueadas
-    }else if (u <= 0.0){
-        // Si no esta bloqueada, pero esta totalmente apagada
-        final_color = vec3(0.0, 0.0, 0.0);
+        final_color = vec3(0.4, 0.4, 0.5); // Azul celeste para células bloqueadas
     }else{
-        // No esta bloqueada y tiene voltaje
-        final_color = colormap(u_norm);
+        // Se define un rango maximo de visualizacion
+        float max_val = 0.5;
+        float intensity = clamp(abs(u) / max_val, 0.0, 1.0); // Intensidad para el colormap
+
+        if (u > 0.0){
+            final_color = vec3(1.0, 1.0, 0.0) * intensity; // Rojo para valores positivos
+            if (u > 0.8){
+                float white_intensity = (intensity - 0.8) / 0.5; // Intensidad para el blanco
+                final_color = mix(final_color, vec3(1.0), white_intensity); // Mezclar con blanco
+            }
+        }else{
+            final_color = vec3(0.0, 0.6, 1.0) * intensity; // Azul para valores negativos
+        }
     }
     
     // Calcular las coordenadas dentro de la celda para dibujar bordes

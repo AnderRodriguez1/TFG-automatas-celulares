@@ -3,6 +3,7 @@ out vec4 FragColor;
 in vec2 TexCoords;
 
 uniform sampler2D u_state_texture;
+uniform sampler2D u_noise_texture; 
 uniform vec2 u_grid_size;
 uniform float dt;
 
@@ -17,6 +18,7 @@ void main(){
     vec4 current_state = texture(u_state_texture, TexCoords);
     float u = current_state.r;
     float v = current_state.g;
+    float noise = texture(u_noise_texture, TexCoords).r; // Ruido para evitar patrones simétricos
 
     vec2 px = 1.0 / u_grid_size;
     float sum_u_neighbors = 0.0;
@@ -42,16 +44,12 @@ void main(){
 
 
     // Aplicar la ecuacion de FitzHugh-Nagumo ("Pattern formation")
-    float du_dt = Du * laplacian_u + (a - u)*(u - 1.0)*u - v;
+    float du_dt = Du * laplacian_u + (a - u)*(u - 1.0)*u - v + noise;
     float dv_dt = Dv * laplacian_v + e * (b*u - v);
 
     // Metodo de euler (igual se puede mejorar con RK4 u otro)
     float u_new = u + dt * du_dt;
     float v_new = v + dt * dv_dt;
-
-    // Clampeo de valores para evitar inestabilidades numericas
-    u_new = clamp(u_new, -0.5, 1.5);
-    v_new = clamp(v_new, -0.5, 1.5);
     
     FragColor = vec4(u_new, v_new, 0.0, 1.0);
 }
