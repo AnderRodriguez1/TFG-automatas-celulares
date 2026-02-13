@@ -9,7 +9,7 @@ class Config:
     """
     def __init__(self, grid_width=500, grid_height=500, visual_speed=24, initial_density=0.3,
                  a=0.16, b=0.14, e=0.025, Du=4.0, Dv=0.5, noise_amplitude=0.0, repetitions_per_frame=50,
-                 dt_simulation=0.04, time_scale = 100.0):
+                 dt_simulation=0.02, time_scale = 50.0):
         self.grid_width = grid_width
         self.grid_height = grid_height
         self.Dv = Dv # Coeficiente de difusión para v

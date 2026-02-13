@@ -32,17 +32,17 @@ void main()
         final_color = vec3(0.4, 0.4, 0.5); // Azul celeste para células bloqueadas
     }else{
         // Se define un rango maximo de visualizacion
-        float max_val = 1.5;
+        float max_val = 1.0;
         float intensity = clamp(abs(u) / max_val, 0.0, 1.0); // Intensidad para el colormap
 
-        if (u > 0.0){
+        if (u > 0.5){// Solo mostrar valores mayores a 0.3 para evitar ruido visual, ajustar segun sea necesario
             final_color = vec3(1.0, 1.0, 0.0) * intensity; // Rojo para valores positivos
             if (u > 0.8){
                 float white_intensity = (intensity - 0.8) / 0.5; // Intensidad para el blanco
                 final_color = mix(final_color, vec3(1.0), white_intensity); // Mezclar con blanco
             }
         }else{
-            final_color = vec3(0.0, 0.6, 1.0) * intensity; // Azul para valores negativos
+            final_color = vec3(0.0, 0.0, 0.0) * intensity; // Azul para valores negativos
         }
     }
     
