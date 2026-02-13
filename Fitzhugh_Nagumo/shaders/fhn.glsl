@@ -4,6 +4,7 @@ in vec2 TexCoords;
 
 uniform sampler2D u_state_texture;
 uniform sampler2D u_noise_texture; 
+uniform vec2 u_noise_offset;
 uniform vec2 u_grid_size;
 uniform float dt;
 
@@ -18,7 +19,7 @@ void main(){
     vec4 current_state = texture(u_state_texture, TexCoords);
     float u = current_state.r;
     float v = current_state.g;
-    float noise = texture(u_noise_texture, TexCoords).r; // Ruido para evitar patrones simétricos
+    float noise = texture(u_noise_texture, TexCoords + u_noise_offset).r; // Ruido con offset aleatorio
 
     vec2 px = 1.0 / u_grid_size;
     float sum_u_neighbors = 0.0;
@@ -30,11 +31,15 @@ void main(){
             if (i == 0 && j == 0) {
                 continue; // Saltar el centro
             }
-            vec2 offset = vec2(float(i), float(j)) * px;
-            // fract() para las condiciones de contorno periódicas
-            vec4 neighbor_state = texture(u_state_texture, fract(TexCoords + offset));
-            sum_u_neighbors += neighbor_state.r;
-            sum_v_neighbors += neighbor_state.g;
+            vec2 neighbor_uv = TexCoords + vec2(float(i), float(j)) * px;
+            // Si el vecino está fuera de la grid, se trata como muro (estado en reposo u=0, v=0)
+            if (neighbor_uv.x < 0.0 || neighbor_uv.x > 1.0 || neighbor_uv.y < 0.0 || neighbor_uv.y > 1.0) {
+                // No sumar nada: el muro tiene u=0, v=0
+            } else {
+                vec4 neighbor_state = texture(u_state_texture, neighbor_uv);
+                sum_u_neighbors += neighbor_state.r;
+                sum_v_neighbors += neighbor_state.g;
+            }
         }
     }
 

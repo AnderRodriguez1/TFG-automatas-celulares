@@ -47,6 +47,9 @@ class GridWidget(QOpenGLWidget):
         self.last_pan_pos = QtCore.QPointF()
 
         self._is_initialized = False
+        self.noise_pool = []          # Pool de texturas de ruido pre-generadas
+        self.noise_pool_size = 8       # Número de texturas en el pool
+        self.noise_pool_idx = 0
 
     def initializeGL(self):
         """
@@ -82,7 +85,15 @@ class GridWidget(QOpenGLWidget):
                 tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
                 self.textures.append(tex)
                 self.fbos.append(self.ctx.framebuffer(color_attachments=[tex]))
-            self.noise_texture = self.ctx.texture((self.config.grid_width, self.config.grid_height), 4, dtype='f4')
+            # Pre-generar pool de texturas de ruido (distribución normal)
+            for _ in range(self.noise_pool_size):
+                noise = np.random.randn(self.config.grid_height, self.config.grid_width, 4).astype('f4') * self.config.noise_amplitude
+                tex = self.ctx.texture((self.config.grid_width, self.config.grid_height), 4, dtype='f4')
+                tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
+                tex.repeat_x = True
+                tex.repeat_y = True
+                tex.write(noise.tobytes())
+                self.noise_pool.append(tex)
             QtCore.QTimer.singleShot(0, self.perform_initial_render)
         except Exception as e:
             print(f"Error durante la inicialización de OpenGL: {e}")
@@ -137,14 +148,14 @@ class GridWidget(QOpenGLWidget):
                 self.block_vao.release()
             if self.ctx: 
                 self.ctx.release()
-            if self.noise_texture: 
-                self.noise_texture.release()
+            for noise_tex in self.noise_pool:
+                noise_tex.release()
             #print("Recursos liberados.")
         finally:
             self.doneCurrent()
 
     def next_generation(self):
-        for _ in range(10):
+        for _ in range(self.config.repetitions_per_frame):
             self.run_fhn_shader()
         self.update()
 
@@ -229,7 +240,7 @@ class GridWidget(QOpenGLWidget):
             self.fbos[dest_idx].use()
             # Configurar los parámetros del shader
             self.fhn_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
-            self.fhn_program['dt'].value = 1 / self.config.speed 
+            self.fhn_program['dt'].value = 1 / self.config.visual_speed 
             self.fhn_program['a'].value = self.config.a
             self.fhn_program['b'].value = self.config.b
             self.fhn_program['e'].value = self.config.e
@@ -240,11 +251,12 @@ class GridWidget(QOpenGLWidget):
             self.textures[source_idx].use(location=0)
             self.fhn_program['u_state_texture'].value = 0
 
-            # Generar textura de ruido (distribución normal, media=0, std=0.01) y escribirla en la GPU
-            noise = np.random.randn(self.config.grid_height, self.config.grid_width, 4).astype('f4') * 0.01
-            self.noise_texture.write(noise.tobytes())
-            self.noise_texture.use(location=1)
+            # Usar textura de ruido pre-generada con offset aleatorio para variedad
+            noise_tex = self.noise_pool[self.noise_pool_idx % self.noise_pool_size]
+            self.noise_pool_idx += 1
+            noise_tex.use(location=1)
             self.fhn_program['u_noise_texture'].value = 1
+            self.fhn_program['u_noise_offset'].value = (np.random.random(), np.random.random())
             # Ejecutar el shader
             self.fhn_vao.render(moderngl.TRIANGLES)
             self.current_texture_idx = dest_idx

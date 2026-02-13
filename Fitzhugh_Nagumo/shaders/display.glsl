@@ -32,7 +32,7 @@ void main()
         final_color = vec3(0.4, 0.4, 0.5); // Azul celeste para células bloqueadas
     }else{
         // Se define un rango maximo de visualizacion
-        float max_val = 0.5;
+        float max_val = 1.5;
         float intensity = clamp(abs(u) / max_val, 0.0, 1.0); // Intensidad para el colormap
 
         if (u > 0.0){
