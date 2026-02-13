@@ -7,6 +7,7 @@ import moderngl
 from config_modern import Config
 from PIL import Image
 import numpy as np
+import time
 
 def load_shader_source(shader_file: str) -> str:
     """
@@ -50,6 +51,9 @@ class GridWidget(QOpenGLWidget):
         self.noise_pool = []          # Pool de texturas de ruido pre-generadas
         self.noise_pool_size = 8       # Número de texturas en el pool
         self.noise_pool_idx = 0
+
+        self.time_accumulator = 0.0
+        self.last_time = time.perf_counter()
 
     def initializeGL(self):
         """
@@ -155,9 +159,20 @@ class GridWidget(QOpenGLWidget):
             self.doneCurrent()
 
     def next_generation(self):
-        for _ in range(self.config.repetitions_per_frame):
+        now = time.perf_counter()
+        frame_dt = now - self.last_time
+        self.last_time = now
+        # No se hasta que punto es necesario limitar el dt, asi que lo dejo comentado por ahora
+        # frame_dt = min(frame_dt, 0.1)  
+        self.time_accumulator += frame_dt * self.config.time_scale
+        max_steps = 300  # Evitar bucles infinitos en caso de que la simulación no pueda seguir el ritmo
+        steps = 0
+        while self.time_accumulator >= self.config.dt_simulation and steps < max_steps:
             self.run_fhn_shader()
+            self.time_accumulator -= self.config.dt_simulation
+            steps += 1
         self.update()
+        
 
     def restart_grid(self):
         self.run_init_shader()
@@ -240,7 +255,8 @@ class GridWidget(QOpenGLWidget):
             self.fbos[dest_idx].use()
             # Configurar los parámetros del shader
             self.fhn_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
-            self.fhn_program['dt'].value = 1 / self.config.visual_speed 
+            self.fhn_program['dt'].value = self.config.dt_simulation
+            self.fhn_program['sqrt_dt'].value = np.sqrt(self.config.dt_simulation)
             self.fhn_program['a'].value = self.config.a
             self.fhn_program['b'].value = self.config.b
             self.fhn_program['e'].value = self.config.e

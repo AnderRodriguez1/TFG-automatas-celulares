@@ -7,6 +7,7 @@ uniform sampler2D u_noise_texture;
 uniform vec2 u_noise_offset;
 uniform vec2 u_grid_size;
 uniform float dt;
+uniform float sqrt_dt;
 
 // Parametros del modelo FitzHugh-Nagumo
 uniform float a;
@@ -49,12 +50,23 @@ void main(){
 
 
     // Aplicar la ecuacion de FitzHugh-Nagumo ("Pattern formation")
-    float du_dt = Du * laplacian_u + (a - u)*(u - 1.0)*u - v + noise;
-    float dv_dt = Dv * laplacian_v + e * (b*u - v);
+    float R1_u = (a - u)*(u - 1.0)*u - v; // Termino de reaccion
+    float R1_v = e * (b*u - v); // Termino de reaccion
+    float u_pred = u + R1_u * dt; // Paso intermedio para RK2
+    float v_pred = v + R1_v * dt; // Paso intermedio para RK2
+    float R2_u = (a - u_pred)*(u_pred - 1.0)*u_pred - v_pred; // Termino de reaccion en el paso intermedio
+    float R2_v = e * (b*u_pred - v_pred); // Termino de reaccion en el paso intermedio
+
+    float du_react = 0.5 * dt * (R1_u + R2_u); // Promedio de las reacciones en el paso actual y el intermedio
+    float dv_react = 0.5 * dt * (R1_v + R2_v); // Promedio de las reacciones en el paso actual y el intermedio
+
+    float du_diff = Du * laplacian_u * dt; // Termino de difusion
+    float dv_diff = Dv * laplacian_v * dt; // Termino de difusion
+    float stochastic_term = noise * sqrt_dt; // Termino estocástico escalado por sqrt(dt)
 
     // Metodo de euler (igual se puede mejorar con RK4 u otro)
-    float u_new = u + dt * du_dt;
-    float v_new = v + dt * dv_dt;
+    float u_new = u + du_react + du_diff + stochastic_term; // Suma de reaccion, difusion y ruido
+    float v_new = v + dv_react + dv_diff; // Suma de reaccion y difusion (sin ruido)
     
     FragColor = vec4(u_new, v_new, 0.0, 1.0);
 }

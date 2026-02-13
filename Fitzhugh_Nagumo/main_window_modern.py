@@ -55,7 +55,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.layout.addWidget(self.restart_button)
 
         self.timer = QtCore.QTimer()
-        self.timer.setInterval(1000/self.config.visual_speed) # Intervalo entre frames en ms
+        self.timer.setInterval(0) # Intervalo entre frames en ms
         self.timer.timeout.connect(self.grid_widget.next_generation)
         self.connect_signals()
 
@@ -72,7 +72,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.next_button.clicked.connect(self.grid_widget.next_generation)
         self.restart_button.clicked.connect(self.grid_widget.restart_grid)
         self.timer_button.clicked.connect(self.toggle_timer)
-        self.timer.setInterval(1000/self.config.visual_speed) # Intervalo entre frames en ms
+        self.timer.setInterval(0) # Intervalo entre frames en ms
         self.timer.timeout.connect(self.grid_widget.next_generation)
 
     @QtCore.Slot()
