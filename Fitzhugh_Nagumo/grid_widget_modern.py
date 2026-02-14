@@ -8,6 +8,7 @@ from config_modern import Config
 from PIL import Image
 import numpy as np
 import time
+from scipy.ndimage import binary_dilation
 
 def load_shader_source(shader_file: str) -> str:
     """
@@ -54,6 +55,34 @@ class GridWidget(QOpenGLWidget):
 
         self.time_accumulator = 0.0
         self.last_time = time.perf_counter()
+
+        # Umbrales para deteccion de autoexcitacion
+        self.u_on = 0.5   # Umbral para considerar una celula "excitada"
+        self.u_dead = 0.05  # Si max(u) < u_dead, el sistema ha muerto
+
+        # Elementos estructurantes para analisis de conectividad
+        self._struct_3x3 = np.ones((3, 3), dtype=bool)
+        # Disco radio 5 (11x11) para flood fill, conexiones diagonales permitidas
+        yy, xx = np.ogrid[-5:6, -5:6]
+        self._struct_bridge = (xx**2 + yy**2 <= 25).astype(bool)
+        # Disco radio 15 (31x31), margen de seguridad para auto-excitacion
+        # Celdas dentro de este margen del frente causal no se consideran autoexcitadas
+        yy, xx = np.ogrid[-15:16, -15:16]
+        self._struct_safety = (xx**2 + yy**2 <= 225).astype(bool)
+
+        shape = (self.config.grid_height, self.config.grid_width)
+        # prev_excited: celulas que estaban por encima de u_on en el analisis anterior
+        self.prev_excited = np.zeros(shape, dtype=np.bool_)
+        # ever_activated: True si la celula estuvo excitada 2 checks consecutivos (permanente, solo crece), asi se evitan
+        # falsos positivos por ruido 
+        self.ever_activated = np.zeros(shape, dtype=np.bool_)
+        # reached: True si la celula esta conectada al seed a traves de ever_activated (flood fill, solo crece)
+        self.reached = np.zeros(shape, dtype=np.bool_)
+        # Flags de resultado
+        self.auto_excited = False  # Se detecto autoexcitacion en algun momento
+        self.hit_target = False    # La onda causal llego a la pared derecha
+        self.system_dead = False   # Todo el sistema ha vuelto a reposo
+        self._last_u_max = 1.0     # Ultimo max(u) leido, para detectar muerte
 
     def initializeGL(self):
         """
@@ -106,7 +135,44 @@ class GridWidget(QOpenGLWidget):
     def perform_initial_render(self):
         self.run_init_shader()
         self._is_initialized = True
+        self._reset_tracking()
         self.update()
+
+    def regenerate_noise_pool(self):
+        """
+        Regenera las texturas de ruido con la amplitud actual de config.noise_amplitude.
+        Esto se llama cada vez que se cambia sigma en el barrido, para que no se usen
+        las mismas texturas siempre
+        """
+        self.makeCurrent()
+        try:
+            for tex in self.noise_pool:
+                noise = np.random.randn(self.config.grid_height, self.config.grid_width, 4).astype('f4') * self.config.noise_amplitude
+                tex.write(noise.tobytes())
+        finally:
+            self.doneCurrent()
+
+    def _reset_tracking(self):
+        """
+        Reinicia todas las mascaras y flags de deteccion.
+        """
+        self.prev_excited[:] = False
+        self.ever_activated[:] = False
+        self.reached[:] = False
+        self.auto_excited = False
+        self.hit_target = False
+        self.system_dead = False
+        self.stagnated = False
+        self._last_u_max = 1.0
+        self._prev_reached_count = 0
+        self._stagnation_count = 0
+
+        # Semilla causal: el patron inicial (cuadrado en el centro)
+        cx = self.config.grid_width // 2
+        cy = self.config.grid_height // 2
+        s = self.config.spot_size // 2
+        self.reached[cy - s:cy + s, cx - s:cx + s] = True
+        self.ever_activated[cy - s:cy + s, cx - s:cx + s] = True
 
     def paintGL(self):
         if not self._is_initialized: 
@@ -217,7 +283,7 @@ class GridWidget(QOpenGLWidget):
             u_spot = 0.9
             v_spot = 0.11
             
-            spot_size = 30 # Tamaño del cuadrado
+            spot_size = self.config.spot_size # Tamaño del cuadrado
             # Inicializar con todo 0
             rgba_grid = np.zeros((self.config.grid_height, self.config.grid_width, 4), dtype='f4')
             rgba_grid[..., 0] = u_background
@@ -246,14 +312,19 @@ class GridWidget(QOpenGLWidget):
             self.doneCurrent()
 
     def run_fhn_shader(self):
+        """
+        Ejecuta un solo paso del shader FHN. Para multiples pasos usar run_fhn_steps.
+        """
+        self.run_fhn_steps(1)
+
+    def run_fhn_steps(self, n):
+        """
+        Ejecuta n pasos del shader FHN en un solo contexto GL.
+        Mucho mas rapido que llamar a run_fhn_shader() n veces.
+        """
         self.makeCurrent()
         try:
-            # Actualizar la textura que NO está en pantalla
-            source_idx = self.current_texture_idx
-            dest_idx = 1 - source_idx
-
-            self.fbos[dest_idx].use()
-            # Configurar los parámetros del shader
+            # Configurar uniforms constantes una sola vez
             self.fhn_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
             self.fhn_program['dt'].value = self.config.dt_simulation
             self.fhn_program['sqrt_dt'].value = np.sqrt(self.config.dt_simulation)
@@ -262,20 +333,23 @@ class GridWidget(QOpenGLWidget):
             self.fhn_program['e'].value = self.config.e
             self.fhn_program['Du'].value = self.config.Du
             self.fhn_program['Dv'].value = self.config.Dv
-            
-            # Enlazar la textura de origen
-            self.textures[source_idx].use(location=0)
-            self.fhn_program['u_state_texture'].value = 0
 
-            # Usar textura de ruido pre-generada con offset aleatorio para variedad
-            noise_tex = self.noise_pool[self.noise_pool_idx % self.noise_pool_size]
-            self.noise_pool_idx += 1
-            noise_tex.use(location=1)
-            self.fhn_program['u_noise_texture'].value = 1
-            self.fhn_program['u_noise_offset'].value = (np.random.random(), np.random.random())
-            # Ejecutar el shader
-            self.fhn_vao.render(moderngl.TRIANGLES)
-            self.current_texture_idx = dest_idx
+            for _ in range(n):
+                source_idx = self.current_texture_idx
+                dest_idx = 1 - source_idx
+
+                self.fbos[dest_idx].use()
+                self.textures[source_idx].use(location=0)
+                self.fhn_program['u_state_texture'].value = 0
+
+                noise_tex = self.noise_pool[self.noise_pool_idx % self.noise_pool_size]
+                self.noise_pool_idx += 1
+                noise_tex.use(location=1)
+                self.fhn_program['u_noise_texture'].value = 1
+                self.fhn_program['u_noise_offset'].value = (np.random.random(), np.random.random())
+
+                self.fhn_vao.render(moderngl.TRIANGLES)
+                self.current_texture_idx = dest_idx
         finally:
             self.doneCurrent()
 
@@ -301,6 +375,167 @@ class GridWidget(QOpenGLWidget):
         finally:
             self.doneCurrent()
         self.update()
+
+    def _read_u(self):
+        """
+        Lee la textura actual y devuelve un array con los valores de u (canal R)
+        """
+        tex = self.textures[self.current_texture_idx]
+        raw = tex.read(alignment=1)
+        arr = np.frombuffer(raw, dtype='f4').reshape((self.config.grid_height, self.config.grid_width, 4))
+        return arr[..., 0] # Canal R = u
+    
+    def _update_ever_activated(self, u_values):
+        """
+        Marca en ever_activated las celulas que superan u_on durante
+        2 checks de analisis consecutivos. Esto filtra picos de ruido
+        transitorios que solo duran 1 check.
+        """
+        currently_excited = u_values >= self.u_on
+        # Solo las que estaban excitadas tambien en el check anterior
+        confirmed = currently_excited & self.prev_excited
+        self.ever_activated |= confirmed
+        # Guardar el estado actual para la proxima comparacion
+        self.prev_excited = currently_excited.copy()
+
+    def _update_causality(self, max_iters=20):
+        """
+        Flood fill: expande 'reached' a traves de ever_activated con puente
+        Solo marca auto-excitacion si hay celdas lejos del frente causal (hay que
+        sacrificar un poco de sensibilidad para evitar falsos positivos por ruido o 
+        pequeñas burbujas que se desprenden del frente)
+        """
+        # Expandir reached puenteando huecos pequenos en ever_activated
+        bridge = binary_dilation(self.ever_activated, structure=self._struct_bridge)
+        for _ in range(max_iters):
+            expanded = binary_dilation(self.reached, structure=self._struct_bridge)
+            new = expanded & bridge & ~self.reached
+            if not np.any(new):
+                break
+            self.reached |= new
+
+        # Comprobar auto-excitacion
+        non_causal = self.ever_activated & ~self.reached
+        if not np.any(non_causal):
+            return
+        # Dilatar reached con el margen de seguridad grande (radio 15)
+        # Celdas dentro de este margen se consideran parte de la onda (gaps, blobs...)
+        safety_zone = binary_dilation(self.reached, structure=self._struct_safety)
+        truly_isolated = non_causal & ~safety_zone
+        if np.any(truly_isolated):
+            self.auto_excited = True
+
+    def _check_system_dead(self, u_values):
+        """
+        Detecta si todo el sistema ha vuelto al reposo (onda muerta).
+        """
+        self._last_u_max = float(u_values.max())
+        # Solo declarar muerto si alguna vez hubo activacion (para no cortar al inicio)
+        if np.any(self.ever_activated) and self._last_u_max < self.u_dead:
+            self.system_dead = True
+
+    def _check_stagnation(self, stagnation_limit=10):
+        """
+        Detecta si la region 'reached' ha dejado de crecer (onda estancada).
+        No lo he visto ocurrir, pero por si acaso lo dejo como criterio de 
+        fallo, porque el ruido puede hacer que la onda no "muera" pero en verdad son puntos
+        aleatorios
+        """
+        current_count = int(np.sum(self.reached))
+        if current_count <= self._prev_reached_count:
+            self._stagnation_count += 1
+        else:
+            self._stagnation_count = 0
+        self._prev_reached_count = current_count
+        if self._stagnation_count >= stagnation_limit:
+            self.stagnated = True
+
+    def _check_target_hit(self):
+        """
+        Comprueba si la onda causal (reached) ha llegado a la columna derecha.
+        Lo ideal sería marcar cualquiera de las paredes, pero en como se propaga como
+        una onda circular, no importa mucho
+        """
+        if np.any(self.reached[:, -1]):
+            self.hit_target = True
+
+    def analyze_state(self):
+        """
+        Lee el estado de la GPU, actualiza mascaras y comprueba condiciones
+        """
+        self.makeCurrent()
+        try:
+            u = self._read_u()
+        finally:
+            self.doneCurrent()
+        self._update_ever_activated(u)
+        self._update_causality()
+        self._check_target_hit()
+        self._check_system_dead(u)
+        self._check_stagnation()
+
+    def run_single_trial(self, max_steps=10000, analyze_every=1, verbose=True, stop_on_auto_excitation=False):
+        """
+        Ejecuta un ensayo completo de propagacion de onda.
+        Esta funcion solo se usa en un codigo, seguramente se podria eliminar
+        Devuelve un dict con los resultados:
+            success: bool  - la onda alcanzo el objetivo sin autoexcitacion
+            hit_target: bool
+            auto_excited: bool
+            steps: int
+            sim_time: float
+        Si stop_on_auto_excitation=True, para en cuanto detecta autoexcitacion.
+        """
+        self.makeCurrent()
+        try:
+            self.run_init_shader()
+        finally:
+            self.doneCurrent()
+
+        self._reset_tracking()
+
+        t = 0.0
+        steps = 0
+
+        while steps < max_steps and not self.hit_target and not self.system_dead and not self.stagnated:
+            if stop_on_auto_excitation and self.auto_excited:
+                break
+            batch = min(analyze_every, max_steps - steps)
+            self.run_fhn_steps(batch)
+            steps += batch
+            t += batch * self.config.dt_simulation
+            self.analyze_state()
+
+            if verbose and steps % 2000 == 0:
+                n_ever = int(np.sum(self.ever_activated))
+                n_reached = int(np.sum(self.reached))
+                print(f"  step {steps}/{max_steps}  t={t:.2f}s  "
+                      f"ever_activated={n_ever}  reached={n_reached}  "
+                      f"auto_excited={self.auto_excited}")
+
+        success = self.hit_target and not self.auto_excited
+
+        if verbose:
+            if success:
+                print(f"ÉXITO: La onda alcanzó la pared en {t:.2f}s ({steps} pasos) sin autoexcitación.")
+            elif self.hit_target and self.auto_excited:
+                print(f"FALLO (autoexcitación): La onda llegó en {t:.2f}s pero hubo activación espontánea.")
+            elif self.system_dead:
+                print(f"FALLO (sistema muerto): Toda la actividad cesó en {t:.2f}s ({steps} pasos).")
+            elif self.stagnated:
+                print(f"FALLO (estancado): La onda dejó de avanzar en {t:.2f}s ({steps} pasos).")
+            else:
+                print(f"FALLO (timeout): La onda no alcanzó la pared tras {t:.2f}s ({steps} pasos).")
+
+        return {
+            "success": success,
+            "hit_target": self.hit_target,
+            "auto_excited": self.auto_excited,
+            "system_dead": self.system_dead,
+            "stagnated": self.stagnated,
+            "steps": steps,
+            "sim_time": t,
+        }
 
     def wheelEvent(self, event):
         """

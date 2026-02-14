@@ -64,7 +64,7 @@ void main(){
     float dv_diff = Dv * laplacian_v * dt; // Termino de difusion
     float stochastic_term = noise * sqrt_dt; // Termino estocástico escalado por sqrt(dt)
 
-    // Metodo de euler (igual se puede mejorar con RK4 u otro)
+    // Calculo del nuevo estado sumando reaccion, difusion y ruido
     float u_new = u + du_react + du_diff + stochastic_term; // Suma de reaccion, difusion y ruido
     float v_new = v + dv_react + dv_diff; // Suma de reaccion y difusion (sin ruido)
     

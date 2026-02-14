@@ -50,8 +50,8 @@ class ConfigTab(QtWidgets.QDialog):
         self.Dv_spinbox.setValue(config_to_use.Dv)
         
         self.noise_spinbox = QtWidgets.QDoubleSpinBox()
-        self.noise_spinbox.setRange(0.0, 10.0)
-        self.noise_spinbox.setDecimals(3)
+        self.noise_spinbox.setRange(0.0, 1)
+        self.noise_spinbox.setDecimals(5)
         self.noise_spinbox.setValue(config_to_use.noise_amplitude)
 
         self.dt_simulation_spinbox = QtWidgets.QDoubleSpinBox()
@@ -65,6 +65,11 @@ class ConfigTab(QtWidgets.QDialog):
         self.time_scale_spinbox.setValue(config_to_use.time_scale)
         self.time_scale_spinbox.setSuffix("x")
 
+        self.spot_size_spinbox = QtWidgets.QSpinBox()
+        self.spot_size_spinbox.setRange(1, 500)
+        self.spot_size_spinbox.setValue(config_to_use.spot_size)
+        self.spot_size_spinbox.setSuffix(" px")
+
         form_layout.addRow("Alto de la red:", self.height_spinbox)
         form_layout.addRow("Ancho de la red:", self.width_spinbox)
         form_layout.addRow("Parámetro a:", self.a_spinbox)
@@ -75,6 +80,7 @@ class ConfigTab(QtWidgets.QDialog):
         form_layout.addRow("Amplitud del ruido:", self.noise_spinbox)
         form_layout.addRow("Diferencial de tiempo de simulación:", self.dt_simulation_spinbox)
         form_layout.addRow("Escala de tiempo:", self.time_scale_spinbox)
+        form_layout.addRow("Tamaño del patrón inicial:", self.spot_size_spinbox)
 
         layout.addLayout(form_layout)
 
@@ -98,6 +104,7 @@ class ConfigTab(QtWidgets.QDialog):
             Dv=self.Dv_spinbox.value(),
             noise_amplitude=self.noise_spinbox.value(),
             dt_simulation=self.dt_simulation_spinbox.value(),
-            time_scale=self.time_scale_spinbox.value()
+            time_scale=self.time_scale_spinbox.value(),
+            spot_size=self.spot_size_spinbox.value()
         )
         
