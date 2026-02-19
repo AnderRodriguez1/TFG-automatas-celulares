@@ -42,7 +42,7 @@ void main()
                 final_color = mix(final_color, vec3(1.0), white_intensity); // Mezclar con blanco
             }
         }else{
-            final_color = vec3(0.0, 0.0, 0.0) * intensity; // Azul para valores negativos
+            final_color = vec3(0.78, 0.0, 1.0) * intensity; // Azul para valores negativos
         }
     }
     

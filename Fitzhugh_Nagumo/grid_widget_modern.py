@@ -133,7 +133,10 @@ class GridWidget(QOpenGLWidget):
             self.window().close()
 
     def perform_initial_render(self):
-        self.run_init_shader()
+        if self.config.initial_pattern == "square":
+            self.run_init_square_shader()
+        elif self.config.initial_pattern == "two_spots":
+            self.run_init_two_spots_shader()
         self._is_initialized = True
         self._reset_tracking()
         self.update()
@@ -239,9 +242,11 @@ class GridWidget(QOpenGLWidget):
             steps += 1
         self.update()
         
-
     def restart_grid(self):
-        self.run_init_shader()
+        if self.config.initial_pattern == "square":
+            self.run_init_square_shader()
+        elif self.config.initial_pattern == "two_spots":
+            self.run_init_two_spots_shader()
         self.update()
 
     def activate_cell(self, x, y):
@@ -268,7 +273,7 @@ class GridWidget(QOpenGLWidget):
             self.doneCurrent()
         self.update()
 
-    def run_init_shader(self):
+    def run_init_square_shader(self):
         """
         Funcion para ejecutar el shader de inicializacion.
         """
@@ -310,6 +315,46 @@ class GridWidget(QOpenGLWidget):
             self.current_texture_idx = dest_idx
         finally:
             self.doneCurrent()
+
+    def run_init_two_spots_shader(self):
+        """
+        Inicializa un estado con dos circulos excitados a ambos lados del centro, para probar la propagacion y colision de ondas.
+        """
+        self.makeCurrent()
+        try:
+            # Fondo apagado
+            u_background = 0.0
+            v_background = 0.0
+            # Valores de los puntos excitados
+            u_spot = 0.9
+            v_spot = 0.11
+
+            circle_radius = self.config.spot_size // 2
+
+            rgba_grid = np.zeros((self.config.grid_height, self.config.grid_width, 4), dtype='f4')
+            rgba_grid[..., 0] = u_background
+            rgba_grid[..., 1] = v_background
+            rgba_grid[..., 3] = 1.0  # Canal Alpha
+
+            center_x_1 = self.config.grid_width // 4
+            center_x_2 = 3 * self.config.grid_width // 4
+            center_y = self.config.grid_height // 2
+
+            for y in range(self.config.grid_height):
+                for x in range(self.config.grid_width):
+                    if (x - center_x_1) ** 2 + (y - center_y) ** 2 <= circle_radius ** 2:
+                        rgba_grid[y, x, 0] = u_spot
+                        rgba_grid[y, x, 1] = v_spot
+                    elif (x - center_x_2) ** 2 + (y - center_y) ** 2 <= circle_radius ** 2:
+                        rgba_grid[y, x, 0] = u_spot
+                        rgba_grid[y, x, 1] = v_spot
+            dest_idx = 1 - self.current_texture_idx
+            self.textures[dest_idx].write(rgba_grid.tobytes(), alignment=1)
+            self.current_texture_idx = dest_idx
+        finally:
+            self.doneCurrent()
+
+
 
     def run_fhn_shader(self):
         """
@@ -488,7 +533,7 @@ class GridWidget(QOpenGLWidget):
         """
         self.makeCurrent()
         try:
-            self.run_init_shader()
+            self.run_init_square_shader()
         finally:
             self.doneCurrent()
 

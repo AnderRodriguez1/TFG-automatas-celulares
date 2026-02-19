@@ -55,7 +55,7 @@ class ConfigTab(QtWidgets.QDialog):
         self.noise_spinbox.setValue(config_to_use.noise_amplitude)
 
         self.dt_simulation_spinbox = QtWidgets.QDoubleSpinBox()
-        self.dt_simulation_spinbox.setRange(0.0001, 1.0)
+        self.dt_simulation_spinbox.setRange(0.0001, 10.0)
         self.dt_simulation_spinbox.setDecimals(5)
         self.dt_simulation_spinbox.setValue(config_to_use.dt_simulation)
 
@@ -70,6 +70,12 @@ class ConfigTab(QtWidgets.QDialog):
         self.spot_size_spinbox.setValue(config_to_use.spot_size)
         self.spot_size_spinbox.setSuffix(" px")
 
+        self.init_pattern_combobox = QtWidgets.QComboBox()
+        self.init_pattern_combobox.addItem("Cuadrado", "square")
+        self.init_pattern_combobox.addItem("Dos manchas", "two_spots")
+        index = self.init_pattern_combobox.findData(config_to_use.initial_pattern)
+        self.init_pattern_combobox.setCurrentIndex(index)
+
         form_layout.addRow("Alto de la red:", self.height_spinbox)
         form_layout.addRow("Ancho de la red:", self.width_spinbox)
         form_layout.addRow("Parámetro a:", self.a_spinbox)
@@ -81,6 +87,7 @@ class ConfigTab(QtWidgets.QDialog):
         form_layout.addRow("Diferencial de tiempo de simulación:", self.dt_simulation_spinbox)
         form_layout.addRow("Escala de tiempo:", self.time_scale_spinbox)
         form_layout.addRow("Tamaño del patrón inicial:", self.spot_size_spinbox)
+        form_layout.addRow("Patrón inicial:", self.init_pattern_combobox)
 
         layout.addLayout(form_layout)
 
@@ -105,6 +112,7 @@ class ConfigTab(QtWidgets.QDialog):
             noise_amplitude=self.noise_spinbox.value(),
             dt_simulation=self.dt_simulation_spinbox.value(),
             time_scale=self.time_scale_spinbox.value(),
-            spot_size=self.spot_size_spinbox.value()
+            spot_size=self.spot_size_spinbox.value(),
+            initial_pattern=self.init_pattern_combobox.currentData()
         )
         

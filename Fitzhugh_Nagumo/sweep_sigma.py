@@ -23,7 +23,7 @@ import tqdm
 SIGMA_VALUES = np.arange(0.0, 0.25, 0.005)   # Array de sigmas a probar
 N_TRIALS     = 100                             # Repeticiones por sigma
 MAX_STEPS    = 80_000                         # Pasos maximos por ensayo
-ANALYZE_EVERY = 50                           # Pasos entre analisis de estado
+ANALYZE_EVERY = 200                           # Pasos entre analisis de estado
 OUTPUT_DIR   = os.path.join(os.path.dirname(__file__), "CSVs")
 
 def run_sweep():
@@ -68,6 +68,10 @@ def run_sweep():
 
             for trial_idx in range(N_TRIALS):
                 trial_start = time.perf_counter()
+
+                # Regenerar el pool de ruido para cada ensayo individual
+                # para que los ensayos sean estadísticamente independientes
+                widget.regenerate_noise_pool()
 
                 result = widget.run_single_trial(
                     max_steps=MAX_STEPS,
