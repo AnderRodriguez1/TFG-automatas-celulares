@@ -41,7 +41,7 @@ def run_sweep():
         total_sigmas = len(SIGMA_VALUES)
         total_trials = total_sigmas * N_TRIALS
 
-        print(f"BARRIDO DE SIGMA — {total_sigmas} valores × {N_TRIALS} ensayos = {total_trials} ensayos")
+        print(f"BARRIDO DE SIGMA — {total_sigmas} valores x {N_TRIALS} ensayos = {total_trials} ensayos")
         print(f"Sigmas: {SIGMA_VALUES[0]:.3f} hasta {SIGMA_VALUES[-1]:.3f}")
         print(f"Max steps/ensayo: {MAX_STEPS}   analyze_every: {ANALYZE_EVERY}")
         print(f"Output: {OUTPUT_DIR}")

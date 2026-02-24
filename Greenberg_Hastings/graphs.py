@@ -1,5 +1,3 @@
-from OpenGL.raw.GL.ARB.separate_shader_objects import GL_ACTIVE_PROGRAM
-from matplotlib.pyplot import title
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -173,40 +171,75 @@ def compare_critical_periods():
     plt.show()
 
 def plot_individual_data(fit_bool=False):
-    data_by_size = process_data()
+    folder_path = QtWidgets.QFileDialog.getExistingDirectory(
+        None,
+        "Seleccionar carpeta con archivos CSV")
 
-    if not data_by_size:
-        print("No se encontraron datos para graficar.")
+    if not folder_path:
+        print("No se seleccionó ninguna carpeta.")
         return
 
-    
+    data_by_refr = {}
+    for filename in os.listdir(folder_path):
+        if filename.endswith('.csv'):
+            file_path = os.path.join(folder_path, filename)
+            match = re.search(r'refr(\d+)_run(\d+)', filename)
+            size_match = re.search(r'size(\d+)x(\d+)', filename)
+            if match and size_match:
+                refractory = int(match.group(1))
+                width = int(size_match.group(1))
+                height = int(size_match.group(2))
+                size_label = f"{width}x{height}"
+
+                try:
+                    data = pd.read_csv(file_path)
+
+                    if 'Active_cells' in data.columns:
+                        active_cells = data['Active_cells'].values
+                        total_cells = int(size_match.group(1)) * int(size_match.group(2))
+                        active_proportion = active_cells / total_cells
+
+                        last_hundred_steps = active_proportion[-100:]
+                        average_active = np.mean(last_hundred_steps)
+                        if refractory not in data_by_refr:
+                            data_by_refr[refractory] = []
+                        data_by_refr[refractory].append(average_active)
+
+                        #print(f"Archivo: {filename}, Período refractario: {refractory}, Proporción promedio de células activas: {average_active}")
+
+                except Exception as e:
+                    print(f"Error al procesar el archivo {filename}: {e}")
+
+    # Sort refractory values
+    sorted_refr = sorted(data_by_refr.keys())
+    n_runs = len(data_by_refr[sorted_refr[0]])  # number of runs per refractory
+
     plt.figure(figsize=(11.69, 8.27))
 
-    sorted_sizes = sorted(data_by_size.keys(), key=lambda x: int(x.split('x')[0]))
-
-    data = data_by_size[sorted_sizes[4]]
-    periods, averages = zip(*data)
-    index = averages.index(0)
-    clean_periods = periods[:index]
-    clean_averages = averages[:index]
-    plt.plot(periods, np.array(averages), marker='o', linestyle='-', label=f'Datos originales (tamaño {sorted_sizes[4]})')
-    plt.plot(clean_periods, np.array(clean_averages), marker='x', label=f'Datos ajustados (hasta período crítico)')
-
+    # Plot the mean across all runs
+    mean_averages = [np.mean(data_by_refr[refr]) for refr in sorted_refr]
+    std_averages = [np.std(data_by_refr[refr]) for refr in sorted_refr]
+    plt.errorbar(sorted_refr, mean_averages, yerr=std_averages, fmt='o',
+                 color='blue', ecolor='black', linewidth=2, capsize=5,
+                 label='Promedio $\\pm \\sigma$', zorder=10)
 
     if fit_bool:
         try:
-
-            fit_params = curve_fit(curve_fit_function, clean_periods, clean_averages, maxfev=10000)
-            fit_curve = curve_fit_function(np.array(periods), *fit_params[0])
-            print(f"Parámetros de ajuste: {fit_params[0]}")
-            plt.plot(periods, fit_curve, linestyle='--', color='red', label='Curva ajustada')
+            # Find critical period (first refr where mean is 0)
+            nonzero = [(r, m) for r, m in zip(sorted_refr, mean_averages) if m > 0]
+            if nonzero:
+                clean_refr, clean_avg = zip(*nonzero)
+                fit_params = curve_fit(curve_fit_function, clean_refr, clean_avg, maxfev=10000)
+                fit_x = np.linspace(min(sorted_refr), max(sorted_refr), 200)
+                fit_curve = curve_fit_function(fit_x, *fit_params[0])
+                print(f"Parámetros de ajuste: {fit_params[0]}")
+                plt.plot(fit_x, fit_curve, linestyle='--', color='red', linewidth=2, label='Curva ajustada')
         except Exception as e:
             import traceback
             traceback.print_exc()
             print(f"Error al ajustar la curva: {e}")
-            
 
-    plt.title('Proporción promedio de células activas en función del período refractario', fontsize=18, fontweight='bold')
+    plt.title(f'Proporción promedio de células activas ({size_label})', fontsize=18, fontweight='bold')
     plt.xlabel('Período refractario', fontsize=14)
     plt.ylabel('Proporción promedio de células activas (últimos 100 pasos)', fontsize=14)
     plt.grid(True)
