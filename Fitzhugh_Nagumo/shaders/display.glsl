@@ -5,9 +5,14 @@ out vec4 FragColor;
 in vec2 TexCoords;
 
 uniform sampler2D u_state_texture; // Textura actual del estado del grid
+uniform sampler2D u_brain_texture; // Textura del cerebro (1 canal)
 uniform float u_zoom_level; // Nivel de zoom
 uniform vec2 u_view_offset; // Offset de la vista en coordenadas de celda
 uniform vec2 u_grid_size; // Tamaño del grid
+uniform bool u_use_brain;           // Flag para activar overlay cerebral
+uniform bool u_show_brain_regions;  // Flag para mostrar regiones del cerebro
+uniform float u_black_threshold;    // Umbral negro
+uniform float u_white_threshold;    // Umbral blanco
 
 void main()
 {
@@ -26,6 +31,20 @@ void main()
     float is_blocked = current_state.b; // Bloqueo de la celda (canal azul)
 
     vec3 final_color;
+
+    // Modo visualizacion de regiones cerebrales
+    if (u_use_brain && u_show_brain_regions) {
+        float brain_intensity = texture(u_brain_texture, sample_coord).r;
+        if (brain_intensity < u_black_threshold) {
+            final_color = vec3(0.05, 0.05, 0.05); // Negro: bloqueado
+        } else if (brain_intensity >= u_white_threshold) {
+            final_color = vec3(0.95, 0.95, 0.95); // Blanco: materia blanca
+        } else {
+            final_color = vec3(0.5, 0.5, 0.5); // Gris: materia gris
+        }
+        FragColor = vec4(final_color, 1.0);
+        return;
+    }
 
     if (is_blocked > 0.5){
         // Si esta bloqueada

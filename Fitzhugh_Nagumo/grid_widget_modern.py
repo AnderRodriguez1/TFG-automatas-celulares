@@ -49,6 +49,9 @@ class GridWidget(QOpenGLWidget):
         self.last_pan_pos = QtCore.QPointF()
 
         self._is_initialized = False
+        self.brain_texture = None
+        self.use_brain_texture = False
+        self.show_brain_regions = False  # Toggle para visualizar regiones del cerebro
         self.noise_pool = []          # Pool de texturas de ruido pre-generadas
         self.noise_pool_size = 8       # Número de texturas en el pool
         self.noise_pool_idx = 0
@@ -137,6 +140,8 @@ class GridWidget(QOpenGLWidget):
             self.run_init_square_shader()
         elif self.config.initial_pattern == "two_spots":
             self.run_init_two_spots_shader()
+        elif self.config.initial_pattern == "brain":
+            self.run_brain_init_shader()
         self._is_initialized = True
         self._reset_tracking()
         self.update()
@@ -189,6 +194,16 @@ class GridWidget(QOpenGLWidget):
         self.display_program['u_zoom_level'].value = self.zoom_level
         self.display_program['u_view_offset'].value = (self.view_offset_x, self.view_offset_y)
         self.display_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
+
+        # Brain overlay uniforms
+        use_brain = self.use_brain_texture and self.brain_texture is not None
+        self.display_program['u_use_brain'].value = use_brain
+        self.display_program['u_show_brain_regions'].value = self.show_brain_regions
+        if use_brain:
+            self.display_program['u_black_threshold'].value = self.config.brain_black_threshold
+            self.display_program['u_white_threshold'].value = self.config.brain_white_threshold
+            self.brain_texture.use(location=1)
+            self.display_program['u_brain_texture'].value = 1
 
         self.textures[self.current_texture_idx].use(location=0)
         self.display_program['u_state_texture'].value = 0
@@ -247,6 +262,8 @@ class GridWidget(QOpenGLWidget):
             self.run_init_square_shader()
         elif self.config.initial_pattern == "two_spots":
             self.run_init_two_spots_shader()
+        elif self.config.initial_pattern == "brain":
+            self.run_brain_init_shader()
         self.update()
 
     def activate_cell(self, x, y):
@@ -263,6 +280,7 @@ class GridWidget(QOpenGLWidget):
 
             self.activate_cell_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
             self.activate_cell_program['u_flip_coord'].value = (x, y)
+            self.activate_cell_program['u_radius'].value = self.config.spot_size / 2.0
 
             self.textures[source_idx].use(location=0)
             self.activate_cell_program['u_state_texture'].value = 0
@@ -354,6 +372,44 @@ class GridWidget(QOpenGLWidget):
         finally:
             self.doneCurrent()
 
+    def run_brain_init_shader(self, image_path=None):
+        """
+        Carga la imagen de un cerebro y la usa como textura de regiones.
+        También bloquea las celdas negras (canal azul = 1.0) en el estado inicial.
+        """
+        if image_path is None:
+            image_path = Path(__file__).parent / "Cerebro.jpg"
+        
+        img = Image.open(image_path).convert('L')
+        img = img.resize((self.config.grid_width, self.config.grid_height))
+        img = img.transpose(Image.FLIP_TOP_BOTTOM)  # Flip vertical para coordenadas OpenGL
+        
+        brain_data = (np.array(img) / 255.0).astype('f4')  # Normalizar a [0, 1]
+
+        # Crear (o recrear) la textura del cerebro
+        if hasattr(self, 'brain_texture') and self.brain_texture is not None:
+            self.brain_texture.release()
+        self.brain_texture = self.ctx.texture(
+            (self.config.grid_width, self.config.grid_height), 1,
+            data=brain_data.tobytes(), dtype='f4'
+        )
+        self.brain_texture.filter = (moderngl.NEAREST, moderngl.NEAREST)
+        self.use_brain_texture = True
+
+        # Bloquear las celdas negras en el estado del grid
+        self.makeCurrent()
+        try:
+            rgba_grid = np.zeros((self.config.grid_height, self.config.grid_width, 4), dtype='f4')
+            rgba_grid[..., 3] = 1.0  # Alpha
+            # Las celdas con intensidad por debajo del umbral negro se bloquean (canal azul = 1.0)
+            black_mask = brain_data < self.config.brain_black_threshold
+            rgba_grid[black_mask, 2] = 1.0  # Canal B = bloqueado
+
+            dest_idx = 1 - self.current_texture_idx
+            self.textures[dest_idx].write(rgba_grid.tobytes(), alignment=1)
+            self.current_texture_idx = dest_idx
+        finally:
+            self.doneCurrent()
 
 
     def run_fhn_shader(self):
@@ -379,6 +435,15 @@ class GridWidget(QOpenGLWidget):
             self.fhn_program['Du'].value = self.config.Du
             self.fhn_program['Dv'].value = self.config.Dv
 
+            # Parámetros cerebro
+            use_brain = self.use_brain_texture and self.brain_texture is not None
+            self.fhn_program['u_use_brain'].value = use_brain
+            if use_brain:
+                self.fhn_program['a_white'].value = self.config.a_white
+                self.fhn_program['Du_white'].value = self.config.Du_white
+                self.fhn_program['u_black_threshold'].value = self.config.brain_black_threshold
+                self.fhn_program['u_white_threshold'].value = self.config.brain_white_threshold
+
             for _ in range(n):
                 source_idx = self.current_texture_idx
                 dest_idx = 1 - source_idx
@@ -392,6 +457,10 @@ class GridWidget(QOpenGLWidget):
                 noise_tex.use(location=1)
                 self.fhn_program['u_noise_texture'].value = 1
                 self.fhn_program['u_noise_offset'].value = (np.random.random(), np.random.random())
+
+                if use_brain:
+                    self.brain_texture.use(location=2)
+                    self.fhn_program['u_brain_texture'].value = 2
 
                 self.fhn_vao.render(moderngl.TRIANGLES)
                 self.current_texture_idx = dest_idx

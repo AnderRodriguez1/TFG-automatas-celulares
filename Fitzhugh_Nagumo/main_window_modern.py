@@ -33,6 +33,14 @@ class MainWindow(QtWidgets.QMainWindow):
         #select_simulation_action.triggered.connect(self.select_simulation)
         simulation_menu.addAction(select_simulation_action)
 
+        # Vista
+        view_menu = menu_bar.addMenu("&Vista")
+        self.toggle_brain_regions_action = QtGui.QAction("Mostrar regiones del cerebro", self)
+        self.toggle_brain_regions_action.setCheckable(True)
+        self.toggle_brain_regions_action.setShortcut("B")
+        self.toggle_brain_regions_action.triggered.connect(self.toggle_brain_regions)
+        view_menu.addAction(self.toggle_brain_regions_action)
+
         # Añadir todo a los widgets
         container = QtWidgets.QWidget()
 
@@ -113,6 +121,14 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.timer.stop()
             self.timer_button.setText("Iniciar animación")
+
+    @QtCore.Slot()
+    def toggle_brain_regions(self):
+        """
+        Activa/desactiva la visualización de regiones del cerebro
+        """
+        self.grid_widget.show_brain_regions = self.toggle_brain_regions_action.isChecked()
+        self.grid_widget.update()
 
     @QtCore.Slot()
     def save_texture(self):

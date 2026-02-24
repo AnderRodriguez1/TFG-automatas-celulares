@@ -4,23 +4,62 @@ in vec2 TexCoords;
 
 uniform sampler2D u_state_texture;
 uniform sampler2D u_noise_texture; 
+uniform sampler2D u_brain_texture;   // Textura del cerebro (1 canal, intensidad 0..1)
 uniform vec2 u_noise_offset;
 uniform vec2 u_grid_size;
 uniform float dt;
 uniform float sqrt_dt;
 
-// Parametros del modelo FitzHugh-Nagumo
+// Parametros del modelo FitzHugh-Nagumo (valores base = materia gris)
 uniform float a;
 uniform float b;
 uniform float e;
 uniform float Du;
 uniform float Dv;
 
+// Parametros de materia blanca
+uniform float a_white;
+uniform float Du_white;
+
+// Umbrales para distinguir regiones del cerebro
+uniform float u_black_threshold;  // < este valor = bloqueado
+uniform float u_white_threshold;  // > este valor = materia blanca, intermedio = gris
+
+// Flag para activar/desactivar la textura cerebral
+uniform bool u_use_brain;
+
 void main(){
     vec4 current_state = texture(u_state_texture, TexCoords);
-    float u = current_state.r;
+    float u_val = current_state.r;
     float v = current_state.g;
-    float noise = texture(u_noise_texture, TexCoords + u_noise_offset).r; // Ruido con offset aleatorio
+    float is_blocked = current_state.b;
+    float noise = texture(u_noise_texture, TexCoords + u_noise_offset).r;
+
+    // Determinar parametros locales segun la region cerebral
+    float local_a = a;
+    float local_Du = Du;
+
+    if (u_use_brain) {
+        float brain_intensity = texture(u_brain_texture, TexCoords).r;
+
+        if (brain_intensity < u_black_threshold || is_blocked > 0.5) {
+            // Region negra o bloqueada: no hay actividad
+            FragColor = vec4(0.0, 0.0, current_state.b, 1.0);
+            return;
+        }
+
+        if (brain_intensity >= u_white_threshold) {
+            // Materia blanca: usar parametros de materia blanca
+            local_a = a_white;
+            local_Du = Du_white;
+        }
+        // else: materia gris, se usan los parametros base (a, Du)
+    } else {
+        if (is_blocked > 0.5) {
+            FragColor = current_state;
+            return;
+        }
+    }
 
     vec2 px = 1.0 / u_grid_size;
     float sum_u_neighbors = 0.0;
@@ -38,35 +77,41 @@ void main(){
                 // No sumar nada: el muro tiene u=0, v=0
             } else {
                 vec4 neighbor_state = texture(u_state_texture, neighbor_uv);
-                sum_u_neighbors += neighbor_state.r;
-                sum_v_neighbors += neighbor_state.g;
+                // Si el vecino esta bloqueado (o negro cerebral), no aporta difusion
+                bool neighbor_blocked = neighbor_state.b > 0.5;
+                if (u_use_brain) {
+                    float nb_brain = texture(u_brain_texture, neighbor_uv).r;
+                    neighbor_blocked = neighbor_blocked || (nb_brain < u_black_threshold);
+                }
+                if (!neighbor_blocked) {
+                    sum_u_neighbors += neighbor_state.r;
+                    sum_v_neighbors += neighbor_state.g;
+                }
             }
         }
     }
 
-    // Laplaciano de reaccion difusion (formula sacada de "Predator_prey laplacian")
-    float laplacian_u = sum_u_neighbors / 8.0 - u;
+    // Laplaciano de reaccion difusion
+    float laplacian_u = sum_u_neighbors / 8.0 - u_val;
     float laplacian_v = sum_v_neighbors / 8.0 - v;
 
+    // Aplicar la ecuacion de FitzHugh-Nagumo con parametros locales
+    float R1_u = (local_a - u_val)*(u_val - 1.0)*u_val - v;
+    float R1_v = e * (b*u_val - v);
+    float u_pred = u_val + R1_u * dt;
+    float v_pred = v + R1_v * dt;
+    float R2_u = (local_a - u_pred)*(u_pred - 1.0)*u_pred - v_pred;
+    float R2_v = e * (b*u_pred - v_pred);
 
-    // Aplicar la ecuacion de FitzHugh-Nagumo ("Pattern formation")
-    float R1_u = (a - u)*(u - 1.0)*u - v; // Termino de reaccion
-    float R1_v = e * (b*u - v); // Termino de reaccion
-    float u_pred = u + R1_u * dt; // Paso intermedio para RK2
-    float v_pred = v + R1_v * dt; // Paso intermedio para RK2
-    float R2_u = (a - u_pred)*(u_pred - 1.0)*u_pred - v_pred; // Termino de reaccion en el paso intermedio
-    float R2_v = e * (b*u_pred - v_pred); // Termino de reaccion en el paso intermedio
+    float du_react = 0.5 * dt * (R1_u + R2_u);
+    float dv_react = 0.5 * dt * (R1_v + R2_v);
 
-    float du_react = 0.5 * dt * (R1_u + R2_u); // Promedio de las reacciones en el paso actual y el intermedio
-    float dv_react = 0.5 * dt * (R1_v + R2_v); // Promedio de las reacciones en el paso actual y el intermedio
+    float du_diff = local_Du * laplacian_u * dt;
+    float dv_diff = Dv * laplacian_v * dt;
+    float stochastic_term = noise * sqrt_dt;
 
-    float du_diff = Du * laplacian_u * dt; // Termino de difusion
-    float dv_diff = Dv * laplacian_v * dt; // Termino de difusion
-    float stochastic_term = noise * sqrt_dt; // Termino estocástico escalado por sqrt(dt)
-
-    // Calculo del nuevo estado sumando reaccion, difusion y ruido
-    float u_new = u + du_react + du_diff + stochastic_term; // Suma de reaccion, difusion y ruido
-    float v_new = v + dv_react + dv_diff; // Suma de reaccion y difusion (sin ruido)
+    float u_new = u_val + du_react + du_diff + stochastic_term;
+    float v_new = v + dv_react + dv_diff;
     
-    FragColor = vec4(u_new, v_new, 0.0, 1.0);
+    FragColor = vec4(u_new, v_new, current_state.b, 1.0);
 }
