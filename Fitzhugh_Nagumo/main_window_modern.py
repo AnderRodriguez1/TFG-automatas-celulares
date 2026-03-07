@@ -41,6 +41,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.toggle_brain_regions_action.triggered.connect(self.toggle_brain_regions)
         view_menu.addAction(self.toggle_brain_regions_action)
 
+        self.toggle_brain_boundary_action = QtGui.QAction("Mostrar frontera gris/blanca", self)
+        self.toggle_brain_boundary_action.setCheckable(True)
+        self.toggle_brain_boundary_action.setShortcut("F")
+        self.toggle_brain_boundary_action.triggered.connect(self.toggle_brain_boundary)
+        view_menu.addAction(self.toggle_brain_boundary_action)
+
         # Añadir todo a los widgets
         container = QtWidgets.QWidget()
 
@@ -61,6 +67,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.layout.addWidget(self.next_button)
         self.layout.addWidget(self.timer_button)
         self.layout.addWidget(self.restart_button)
+
+        self.coord_label = QtWidgets.QLabel("Coordenadas: (-, -)")
+        self.statusBar().addPermanentWidget(self.coord_label)
+        self.grid_widget.cursor_pos_changed.connect(self.update_cursor_coords)
 
         self.timer = QtCore.QTimer()
         self.timer.setInterval(0) # Intervalo entre frames en ms
@@ -107,6 +117,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.grid_widget = GridWidget(config=self.config)
 
             self.layout.insertWidget(0, self.grid_widget)
+            self.grid_widget.cursor_pos_changed.connect(self.update_cursor_coords)
 
             self.connect_signals()
 
@@ -129,6 +140,18 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         self.grid_widget.show_brain_regions = self.toggle_brain_regions_action.isChecked()
         self.grid_widget.update()
+
+    @QtCore.Slot()
+    def toggle_brain_boundary(self):
+        """
+        Activa/desactiva la visualización de la frontera entre materia gris y blanca
+        """
+        self.grid_widget.show_brain_boundary = self.toggle_brain_boundary_action.isChecked()
+        self.grid_widget.update()
+
+    @QtCore.Slot(int, int)
+    def update_cursor_coords(self, x, y):
+        self.coord_label.setText(f"Coordenadas: ({x}, {y})")
 
     @QtCore.Slot()
     def save_texture(self):

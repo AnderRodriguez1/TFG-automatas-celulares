@@ -22,8 +22,11 @@ def load_shader_source(shader_file: str) -> str:
         raise FileNotFoundError(f"Error Crítico: No se pudo encontrar el archivo de shader: {shader_path}")
 
 class GridWidget(QOpenGLWidget):
+    cursor_pos_changed = QtCore.Signal(int, int)  # Señal con coordenadas (x, y) del grid
+
     def __init__(self, config: Config):
         super().__init__()
+        self.setMouseTracking(True)
         self.config = config
 
         self.ctx = None # Contexto de ModernGL
@@ -52,6 +55,7 @@ class GridWidget(QOpenGLWidget):
         self.brain_texture = None
         self.use_brain_texture = False
         self.show_brain_regions = False  # Toggle para visualizar regiones del cerebro
+        self.show_brain_boundary = False  # Toggle para visualizar frontera gris/blanca
         self.noise_pool = []          # Pool de texturas de ruido pre-generadas
         self.noise_pool_size = 8       # Número de texturas en el pool
         self.noise_pool_idx = 0
@@ -199,6 +203,7 @@ class GridWidget(QOpenGLWidget):
         use_brain = self.use_brain_texture and self.brain_texture is not None
         self.display_program['u_use_brain'].value = use_brain
         self.display_program['u_show_brain_regions'].value = self.show_brain_regions
+        self.display_program['u_show_brain_boundary'].value = self.show_brain_boundary
         if use_brain:
             self.display_program['u_black_threshold'].value = self.config.brain_black_threshold
             self.display_program['u_white_threshold'].value = self.config.brain_white_threshold
@@ -480,6 +485,7 @@ class GridWidget(QOpenGLWidget):
 
             self.block_program['u_grid_size'].value = (self.config.grid_width, self.config.grid_height)
             self.block_program['u_block_coord'].value = (x, y)
+            self.block_program['u_block_radius'].value = self.config.spot_size / 2.0
 
             self.textures[source_idx].use(location=0)
             self.block_program['u_state_texture'].value = 0
@@ -682,8 +688,11 @@ class GridWidget(QOpenGLWidget):
             grid_x = int(grid_pos.x())
             grid_y = int(grid_pos.y())
 
-            if 0 <= grid_x < self.config.grid_width and 0 <= grid_y < self.config.grid_height: 
-                self.activate_cell(grid_x, grid_y)
+            if 0 <= grid_x < self.config.grid_width and 0 <= grid_y < self.config.grid_height:
+                if event.modifiers() & QtCore.Qt.ShiftModifier:
+                    self.block_cell(grid_x, grid_y) 
+                else:
+                    self.activate_cell(grid_x, grid_y)
         elif event.button() == QtCore.Qt.RightButton:
             self.panning = True
             self.last_pan_pos = event.position()
@@ -701,6 +710,12 @@ class GridWidget(QOpenGLWidget):
         """
         Evento de mover el raton para arrastre
         """
+        grid_pos = self._pixel_to_grid(event.position())
+        grid_x = int(grid_pos.x())
+        grid_y = int(grid_pos.y())
+        if 0 <= grid_x < self.config.grid_width and 0 <= grid_y < self.config.grid_height:
+            self.cursor_pos_changed.emit(grid_x, grid_y)
+
         if self.panning:
             delta = event.position() - self.last_pan_pos
             self.last_pan_pos = event.position()

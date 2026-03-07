@@ -11,6 +11,7 @@ uniform vec2 u_view_offset; // Offset de la vista en coordenadas de celda
 uniform vec2 u_grid_size; // Tamaño del grid
 uniform bool u_use_brain;           // Flag para activar overlay cerebral
 uniform bool u_show_brain_regions;  // Flag para mostrar regiones del cerebro
+uniform bool u_show_brain_boundary; // Flag para mostrar frontera gris/blanca
 uniform float u_black_threshold;    // Umbral negro
 uniform float u_white_threshold;    // Umbral blanco
 
@@ -65,6 +66,35 @@ void main()
         }
     }
     
+    // Overlay de la frontera entre materia gris y blanca
+    if (u_use_brain && u_show_brain_boundary) {
+        float brain_here = texture(u_brain_texture, sample_coord).r;
+        vec2 texel = 1.0 / u_grid_size;
+        float brain_right = texture(u_brain_texture, sample_coord + vec2(texel.x, 0.0)).r;
+        float brain_left  = texture(u_brain_texture, sample_coord - vec2(texel.x, 0.0)).r;
+        float brain_up    = texture(u_brain_texture, sample_coord + vec2(0.0, texel.y)).r;
+        float brain_down  = texture(u_brain_texture, sample_coord - vec2(0.0, texel.y)).r;
+
+        // Clasificar regiones: 0=negro, 1=gris, 2=blanco
+        int region_here  = (brain_here  < u_black_threshold) ? 0 : (brain_here  >= u_white_threshold) ? 2 : 1;
+        int region_right = (brain_right < u_black_threshold) ? 0 : (brain_right >= u_white_threshold) ? 2 : 1;
+        int region_left  = (brain_left  < u_black_threshold) ? 0 : (brain_left  >= u_white_threshold) ? 2 : 1;
+        int region_up    = (brain_up    < u_black_threshold) ? 0 : (brain_up    >= u_white_threshold) ? 2 : 1;
+        int region_down  = (brain_down  < u_black_threshold) ? 0 : (brain_down  >= u_white_threshold) ? 2 : 1;
+
+        // Si algún vecino está en una región distinta (gris<->blanca), es frontera
+        bool is_boundary = (region_here == 1 || region_here == 2) && (
+            (region_right != region_here && region_right != 0) ||
+            (region_left  != region_here && region_left  != 0) ||
+            (region_up    != region_here && region_up    != 0) ||
+            (region_down  != region_here && region_down  != 0)
+        );
+
+        if (is_boundary) {
+            final_color = mix(final_color, vec3(1.0, 0.0, 0.0), 0.85);
+        }
+    }
+
     // Calcular las coordenadas dentro de la celda para dibujar bordes
     vec2 grid_coord_float = sample_coord * u_grid_size;
     vec2 inside_cell_coord = fract(grid_coord_float);
