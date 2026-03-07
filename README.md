@@ -1,4 +1,12 @@
 # TFG-automatas-celulares
+
+## License
+
+This project is licensed for non-commercial use only.
+Commercial use is prohibited without explicit written permission.
+See the LICENSE file for details.
+
+
 Repositorio del TFG sobre automatas celulares, hecho por Ander Rodríguez Muñoz
 
 -Para poder correr el codigo hace falta activar el entorno de conda
