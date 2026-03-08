@@ -6,6 +6,7 @@ in vec2 TexCoords;
 
 uniform sampler2D u_state_texture; // Textura actual del estado del grid
 uniform sampler2D u_brain_texture; // Textura del cerebro (1 canal)
+uniform sampler2D u_no_diffusion_mask; // Mascara de no-difusion (1 canal)
 uniform float u_zoom_level; // Nivel de zoom
 uniform vec2 u_view_offset; // Offset de la vista en coordenadas de celda
 uniform vec2 u_grid_size; // Tamaño del grid
@@ -30,6 +31,7 @@ void main()
     float u = current_state.r; // Voltaje de la celda (canal rojo)
     float u_norm = (u + 2) / 4.0; // Normalizar u a [0, 1] para el colormap
     float is_blocked = current_state.b; // Bloqueo de la celda (canal azul)
+    float diffusion_factor = texture(u_no_diffusion_mask, sample_coord).r; // Leer de textura separada
 
     vec3 final_color;
 
@@ -63,6 +65,20 @@ void main()
             }
         }else{
             final_color = vec3(0.78, 0.0, 1.0) * intensity; // Azul para valores negativos
+        }
+    }
+
+    // Overlay frontera de zona sin difusión (solo borde, no relleno)
+    if (diffusion_factor < 0.5) {
+        vec2 texel = 1.0 / u_grid_size;
+        float a_right = texture(u_no_diffusion_mask, sample_coord + vec2(texel.x, 0.0)).r;
+        float a_left  = texture(u_no_diffusion_mask, sample_coord - vec2(texel.x, 0.0)).r;
+        float a_up    = texture(u_no_diffusion_mask, sample_coord + vec2(0.0, texel.y)).r;
+        float a_down  = texture(u_no_diffusion_mask, sample_coord - vec2(0.0, texel.y)).r;
+        // Es frontera si algún vecino tiene difusión normal (>= 0.5)
+        bool is_no_diff_boundary = (a_right >= 0.5 || a_left >= 0.5 || a_up >= 0.5 || a_down >= 0.5);
+        if (is_no_diff_boundary) {
+            final_color = mix(final_color, vec3(0.0, 1.0, 0.0), 0.85);
         }
     }
     

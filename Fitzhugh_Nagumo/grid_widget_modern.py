@@ -35,11 +35,13 @@ class GridWidget(QOpenGLWidget):
         self.activate_cell_program = None
         self.fhn_program = None
         self.block_program = None
+        self.no_diffusion_program = None
         # VAOs
         self.display_vao = None
         self.activate_cell_vao = None
         self.fhn_vao = None
         self.block_vao = None
+        self.no_diffusion_vao = None
         # FBOs y Texturas
         self.fbos = []
         self.textures = []
@@ -56,6 +58,8 @@ class GridWidget(QOpenGLWidget):
         self.use_brain_texture = False
         self.show_brain_regions = False  # Toggle para visualizar regiones del cerebro
         self.show_brain_boundary = False  # Toggle para visualizar frontera gris/blanca
+        self.no_diffusion_mask = None    # Textura separada para máscara de no-difusión
+        self.no_diffusion_data = None    # Array numpy backing de la máscara
         self.noise_pool = []          # Pool de texturas de ruido pre-generadas
         self.noise_pool_size = 8       # Número de texturas en el pool
         self.noise_pool_idx = 0
@@ -103,11 +107,13 @@ class GridWidget(QOpenGLWidget):
             activate_cell_source = load_shader_source("shaders/activate_cell.glsl")
             fhn_source = load_shader_source("shaders/fhn.glsl")
             block_source = load_shader_source("shaders/block_cell.glsl")
+            no_diffusion_source = load_shader_source("shaders/no_diffusion.glsl")
             # Crear los programas de shaders
             self.display_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=display_source)
             self.activate_cell_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=activate_cell_source)
             self.fhn_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=fhn_source)
             self.block_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=block_source)
+            self.no_diffusion_program = self.ctx.program(vertex_shader=vertex_source, fragment_shader=no_diffusion_source)
             # Crear los VAOs
             vertices = np.array([-1, -1, 1, -1, 1, 1, -1, 1], dtype='f4')
             indices = np.array([0, 1, 2, 0, 2, 3], dtype='i4')
@@ -119,12 +125,20 @@ class GridWidget(QOpenGLWidget):
             self.activate_cell_vao = self.ctx.vertex_array(self.activate_cell_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             self.fhn_vao = self.ctx.vertex_array(self.fhn_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             self.block_vao = self.ctx.vertex_array(self.block_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
+            self.no_diffusion_vao = self.ctx.vertex_array(self.no_diffusion_program, [(vbo, '2f', 'aPos')], index_buffer=ebo)
             # Crear las texturas y FBOs
             for _ in range(2):
                 tex = self.ctx.texture((self.config.grid_width, self.config.grid_height), 4, dtype='f4')
                 tex.filter = (moderngl.NEAREST, moderngl.NEAREST)
                 self.textures.append(tex)
                 self.fbos.append(self.ctx.framebuffer(color_attachments=[tex]))
+            # Crear textura separada para máscara de no-difusión (1 canal, todo 1.0 = difusión normal)
+            self.no_diffusion_data = np.ones((self.config.grid_height, self.config.grid_width), dtype='f4')
+            self.no_diffusion_mask = self.ctx.texture(
+                (self.config.grid_width, self.config.grid_height), 1, dtype='f4',
+                data=self.no_diffusion_data.tobytes()
+            )
+            self.no_diffusion_mask.filter = (moderngl.NEAREST, moderngl.NEAREST)
             # Pre-generar pool de texturas de ruido (distribución normal)
             for _ in range(self.noise_pool_size):
                 noise = np.random.randn(self.config.grid_height, self.config.grid_width, 4).astype('f4') * self.config.noise_amplitude
@@ -212,6 +226,11 @@ class GridWidget(QOpenGLWidget):
 
         self.textures[self.current_texture_idx].use(location=0)
         self.display_program['u_state_texture'].value = 0
+
+        # Mascara de no-difusion
+        self.no_diffusion_mask.use(location=2)
+        self.display_program['u_no_diffusion_mask'].value = 2
+
         self.display_vao.render(moderngl.TRIANGLES)
 
     def _release_resources(self):
@@ -239,6 +258,12 @@ class GridWidget(QOpenGLWidget):
                 self.block_program.release()
             if self.block_vao: 
                 self.block_vao.release()
+            if self.no_diffusion_program:
+                self.no_diffusion_program.release()
+            if self.no_diffusion_vao:
+                self.no_diffusion_vao.release()
+            if self.no_diffusion_mask:
+                self.no_diffusion_mask.release()
             if self.ctx: 
                 self.ctx.release()
             for noise_tex in self.noise_pool:
@@ -269,6 +294,13 @@ class GridWidget(QOpenGLWidget):
             self.run_init_two_spots_shader()
         elif self.config.initial_pattern == "brain":
             self.run_brain_init_shader()
+        # Reiniciar mascara de no-difusion
+        self.no_diffusion_data[:] = 1.0
+        self.makeCurrent()
+        try:
+            self.no_diffusion_mask.write(self.no_diffusion_data.tobytes())
+        finally:
+            self.doneCurrent()
         self.update()
 
     def activate_cell(self, x, y):
@@ -416,7 +448,6 @@ class GridWidget(QOpenGLWidget):
         finally:
             self.doneCurrent()
 
-
     def run_fhn_shader(self):
         """
         Ejecuta un solo paso del shader FHN. Para multiples pasos usar run_fhn_steps.
@@ -449,6 +480,10 @@ class GridWidget(QOpenGLWidget):
                 self.fhn_program['u_black_threshold'].value = self.config.brain_black_threshold
                 self.fhn_program['u_white_threshold'].value = self.config.brain_white_threshold
 
+            # Mascara de no-difusion (textura separada, location 3)
+            self.no_diffusion_mask.use(location=3)
+            self.fhn_program['u_no_diffusion_mask'].value = 3
+
             for _ in range(n):
                 source_idx = self.current_texture_idx
                 dest_idx = 1 - source_idx
@@ -469,6 +504,7 @@ class GridWidget(QOpenGLWidget):
 
                 self.fhn_vao.render(moderngl.TRIANGLES)
                 self.current_texture_idx = dest_idx
+
         finally:
             self.doneCurrent()
 
@@ -492,6 +528,23 @@ class GridWidget(QOpenGLWidget):
 
             self.block_vao.render(moderngl.TRIANGLES)
             self.current_texture_idx = dest_idx
+        finally:
+            self.doneCurrent()
+        self.update()
+    
+    def no_diffusion_cell(self, x, y):
+        """
+        Establece una zona de no difusion, para simular lesiones.
+        Escribe directamente en la textura de mascara separada (no se ping-pongea).
+        """
+        radius = self.config.spot_size / 2.0
+        Y, X = np.ogrid[:self.config.grid_height, :self.config.grid_width]
+        dist = np.sqrt((X - x)**2 + (Y - y)**2)
+        self.no_diffusion_data[dist <= radius] = 0.0
+
+        self.makeCurrent()
+        try:
+            self.no_diffusion_mask.write(self.no_diffusion_data.tobytes())
         finally:
             self.doneCurrent()
         self.update()
@@ -690,7 +743,7 @@ class GridWidget(QOpenGLWidget):
 
             if 0 <= grid_x < self.config.grid_width and 0 <= grid_y < self.config.grid_height:
                 if event.modifiers() & QtCore.Qt.ShiftModifier:
-                    self.block_cell(grid_x, grid_y) 
+                    self.no_diffusion_cell(grid_x, grid_y) 
                 else:
                     self.activate_cell(grid_x, grid_y)
         elif event.button() == QtCore.Qt.RightButton:

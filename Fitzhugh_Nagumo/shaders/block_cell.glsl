@@ -16,14 +16,7 @@ void main(){
     float distance_to_block = distance(current_grid_coord, u_block_coord);
 
     if (distance_to_block <= u_block_radius){ // Si la celda está dentro del área de bloqueo
-        // Si la celda coincide con la que se ha pulsado
-        if (current_state.b <= 0.5){
-            // Si la celda no esta bloqueada (canal azul <= 0.5), bloquearla
-            FragColor = vec4(current_state.r, current_state.g, 1.0, 1.0);
-        }else{
-            // Si la celda esta bloqueada, desbloquearla
-            FragColor = vec4(current_state.r, current_state.g, 0.0, 1.0);
-        }
+        FragColor = vec4(current_state.r, current_state.g, 1.0, current_state.a);
     }else{
         FragColor = current_state;
     }

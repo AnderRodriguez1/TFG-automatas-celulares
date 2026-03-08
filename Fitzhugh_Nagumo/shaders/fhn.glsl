@@ -5,6 +5,7 @@ in vec2 TexCoords;
 uniform sampler2D u_state_texture;
 uniform sampler2D u_noise_texture; 
 uniform sampler2D u_brain_texture;   // Textura del cerebro (1 canal, intensidad 0..1)
+uniform sampler2D u_no_diffusion_mask; // Mascara de no-difusion (1 canal, 0=sin difusion, 1=normal)
 uniform vec2 u_noise_offset;
 uniform vec2 u_grid_size;
 uniform float dt;
@@ -33,6 +34,7 @@ void main(){
     float u_val = current_state.r;
     float v = current_state.g;
     float is_blocked = current_state.b;
+    float diffusion_factor = texture(u_no_diffusion_mask, TexCoords).r;
     float noise = texture(u_noise_texture, TexCoords + u_noise_offset).r;
 
     // Determinar parametros locales segun la region cerebral
@@ -41,10 +43,9 @@ void main(){
 
     if (u_use_brain) {
         float brain_intensity = texture(u_brain_texture, TexCoords).r;
-
         if (brain_intensity < u_black_threshold || is_blocked > 0.5) {
             // Region negra o bloqueada: no hay actividad
-            FragColor = vec4(0.0, 0.0, current_state.b, 1.0);
+            FragColor = vec4(0.0, 0.0, current_state.b, current_state.a);
             return;
         }
 
@@ -59,6 +60,11 @@ void main(){
             FragColor = current_state;
             return;
         }
+    }
+
+    // Anular difusión si la celda está marcada como sin difusión
+    if (diffusion_factor < 0.9) {
+        local_Du = 0.0;
     }
 
     vec2 px = 1.0 / u_grid_size;
@@ -113,5 +119,5 @@ void main(){
     float u_new = u_val + du_react + du_diff + stochastic_term;
     float v_new = v + dv_react + dv_diff;
     
-    FragColor = vec4(u_new, v_new, current_state.b, 1.0);
+    FragColor = vec4(u_new, v_new, current_state.b, current_state.a);
 }

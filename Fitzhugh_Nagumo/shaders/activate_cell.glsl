@@ -20,7 +20,8 @@ void main(){
 
     if (distance_to_flip <= u_radius){
         // Establecemos la célula al estado "more stable phase"
-        FragColor = vec4(U_SPOT, V_SPOT, 0.0, 1.0);
+        // Preservar el canal alpha (marca de no-difusión)
+        FragColor = vec4(U_SPOT, V_SPOT, 0.0, current_state.a);
     } else {
         // Dejamos las demás células como están
         FragColor = current_state;
