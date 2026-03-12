@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 
 X_PULSE = 340
 Y_PULSE = 180
-
+# Coordenadas de las regiones de interes, se toma la media de una zona de ZONE_SIZE x ZONE_SIZE
 ROIS =[# De 0 a 3, derecho, de 4 a 7, izquierdo
     (265, 65,  "R1"),
     (340, 180, "R2"),
@@ -42,6 +42,195 @@ PULSE_INTERVAL_SIM = 200  # Tiempo simulado entre pulsos (unidades del modelo)
 PULSE_PROBABILITY = 0.005  # Probabilidad de pulso aleatorio por frame
 PULSE_MODE = "periodic"  # "periodic" o "random_right"
 
+# Cuerpo calloso: rectángulo inclinado definido por 4 vértices (x, y) en orden
+CORPUS_CALLOSUM_COORDS = [
+    (228, 468),  # esquina superior-izquierda
+    (232, 468),  # esquina superior-derecha
+    (247, 67),  # esquina inferior-derecha
+    (239, 56),  # esquina inferior-izquierda
+]
+LESION_PROBABILITY = 0.001  # 0.0 = sin lesión, 1.0 = lesión total. Depreciado, ahora se calcula automáticamente para alcanzar TARGET_LESION_FRACTION
+TARGET_LESION_FRACTION = 0.7  # área deseada (0.0-1.0). Si es 0.0 no se lesiona.
+
+def apply_corpus_callosum_lesion(widget, coords, probability):
+    """
+    Lesiona el cuerpo calloso colocando círculos de radio spot_size centrados en píxeles
+    elegidos aleatoriamente dentro del polígono.
+    - probability: fracción de píxeles del polígono usados como centros de círculo.
+      Con círculos solapados, el área real lesionada será mayor; se imprime el % real.
+    Devuelve el porcentaje de área del polígono efectivamente lesionada.
+    """
+    from matplotlib.path import Path as MplPath
+
+    # Ordenar vértices por ángulo respecto al centroide para evitar aristas cruzadas
+    cx = sum(p[0] for p in coords) / len(coords)
+    cy = sum(p[1] for p in coords) / len(coords)
+    coords_sorted = sorted(coords, key=lambda p: np.arctan2(p[1] - cy, p[0] - cx))
+
+    poly = MplPath(coords_sorted + [coords_sorted[0]])
+
+    # Bounding box
+    xs = [p[0] for p in coords]
+    ys = [p[1] for p in coords]
+    x0 = max(0, min(xs))
+    x1 = min(widget.config.grid_width - 1, max(xs))
+    y0 = max(0, min(ys))
+    y1 = min(widget.config.grid_height - 1, max(ys))
+
+    # Grid de puntos dentro del bounding box y dentro del polígono
+    gx, gy = np.meshgrid(np.arange(x0, x1 + 1), np.arange(y0, y1 + 1))
+    points = np.column_stack([gx.ravel(), gy.ravel()])
+    inside_flat = poly.contains_points(points)
+    inside = inside_flat.reshape(gx.shape)
+
+    # Coordenadas absolutas de los píxeles dentro del polígono
+    inside_ys, inside_xs = np.where(inside)
+    inside_ys += y0
+    inside_xs += x0
+    total_poly_pixels = len(inside_xs)
+
+    # Seleccionar aleatoriamente un subconjunto como centros de círculos
+    n_centers = max(1, int(total_poly_pixels * probability))
+    chosen = np.random.choice(total_poly_pixels, size=n_centers, replace=False)
+    center_xs = inside_xs[chosen]
+    center_ys = inside_ys[chosen]
+
+    # Pintar círculos de radio spot_size alrededor de cada centro
+    radius = widget.config.spot_size
+    H, W = widget.no_diffusion_data.shape
+    Y_all, X_all = np.ogrid[:H, :W]
+    for cx_c, cy_c in zip(center_xs, center_ys):
+        dist2 = (X_all - cx_c) ** 2 + (Y_all - cy_c) ** 2
+        widget.no_diffusion_data[dist2 <= radius ** 2] = 0.0
+
+    # Calcular área real lesionada dentro del polígono
+    lesioned_in_poly = int(np.sum(widget.no_diffusion_data[inside_ys, inside_xs] == 0.0))
+    lesion_fraction = lesioned_in_poly / total_poly_pixels if total_poly_pixels > 0 else 0.0
+    print(f"Área del cuerpo calloso lesionada: {lesion_fraction * 100:.1f}%  "
+          f"({lesioned_in_poly}/{total_poly_pixels} píxeles)")
+
+    widget.makeCurrent()
+    try:
+        widget.no_diffusion_mask.write(widget.no_diffusion_data.tobytes())
+    finally:
+        widget.doneCurrent()
+
+    return lesion_fraction
+
+
+def find_lesion_probability(config, coords, target_fraction, tol=0.01, max_iter=150):
+    """
+    Usa bisección para encontrar la probabilidad de centros que produce
+    una cobertura de `target_fraction` (0-1) sobre el polígono del cuerpo calloso.
+    Devuelve la probabilidad encontrada e imprime el resultado.
+    """
+    from matplotlib.path import Path as MplPath
+
+    if target_fraction <= 0.0:
+        return 0.0
+    if target_fraction >= 1.0:
+        return 1.0
+
+    # Precalcular la geometría del polígono (igual que en estimate/apply)
+    cx = sum(p[0] for p in coords) / len(coords)
+    cy = sum(p[1] for p in coords) / len(coords)
+    coords_sorted = sorted(coords, key=lambda p: np.arctan2(p[1] - cy, p[0] - cx))
+    poly = MplPath(coords_sorted + [coords_sorted[0]])
+
+    xs = [p[0] for p in coords]
+    ys = [p[1] for p in coords]
+    x0 = max(0, min(xs))
+    x1 = min(config.grid_width - 1, max(xs))
+    y0 = max(0, min(ys))
+    y1 = min(config.grid_height - 1, max(ys))
+
+    gx, gy = np.meshgrid(np.arange(x0, x1 + 1), np.arange(y0, y1 + 1))
+    points = np.column_stack([gx.ravel(), gy.ravel()])
+    inside_flat = poly.contains_points(points)
+    inside = inside_flat.reshape(gx.shape)
+    inside_ys, inside_xs = np.where(inside)
+    inside_ys += y0
+    inside_xs += x0
+    total_poly_pixels = len(inside_xs)
+
+    radius = config.spot_size
+    H, W = config.grid_height, config.grid_width
+    Y_all, X_all = np.ogrid[:H, :W]
+
+    def coverage_for_prob(prob):
+        n_centers = max(1, int(total_poly_pixels * prob))
+        chosen = np.random.choice(total_poly_pixels, size=n_centers, replace=False)
+        lesion_map = np.zeros((H, W), dtype=bool)
+        for cx_c, cy_c in zip(inside_xs[chosen], inside_ys[chosen]):
+            lesion_map[(X_all - cx_c) ** 2 + (Y_all - cy_c) ** 2 <= radius ** 2] = True
+        return int(np.sum(lesion_map[inside_ys, inside_xs])) / total_poly_pixels
+
+    lo, hi = 0.0, 1.0
+    prob = 0.5
+    for _ in range(max_iter):
+        prob = (lo + hi) / 2.0
+        frac = coverage_for_prob(prob)
+        if abs(frac - target_fraction) <= tol:
+            break
+        if frac < target_fraction:
+            lo = prob
+        else:
+            hi = prob
+
+    final_frac = coverage_for_prob(prob)
+    print(f"[Bisección] probabilidad={prob:.4f} → cobertura={final_frac*100:.1f}% "
+          f"(objetivo={target_fraction*100:.1f}%)")
+    return prob
+
+
+def estimate_lesion_coverage(config, coords, probability):
+    """
+    Calcula en numpy (sin GPU) qué porcentaje del polígono quedaría lesionado
+    con los parámetros dados. Imprime el resultado y lo devuelve.
+    """
+    from matplotlib.path import Path as MplPath
+
+    cx = sum(p[0] for p in coords) / len(coords)
+    cy = sum(p[1] for p in coords) / len(coords)
+    coords_sorted = sorted(coords, key=lambda p: np.arctan2(p[1] - cy, p[0] - cx))
+    poly = MplPath(coords_sorted + [coords_sorted[0]])
+
+    xs = [p[0] for p in coords]
+    ys = [p[1] for p in coords]
+    x0 = max(0, min(xs))
+    x1 = min(config.grid_width - 1, max(xs))
+    y0 = max(0, min(ys))
+    y1 = min(config.grid_height - 1, max(ys))
+
+    gx, gy = np.meshgrid(np.arange(x0, x1 + 1), np.arange(y0, y1 + 1))
+    points = np.column_stack([gx.ravel(), gy.ravel()])
+    inside_flat = poly.contains_points(points)
+    inside = inside_flat.reshape(gx.shape)
+
+    inside_ys, inside_xs = np.where(inside)
+    inside_ys += y0
+    inside_xs += x0
+    total_poly_pixels = len(inside_xs)
+
+    n_centers = max(1, int(total_poly_pixels * probability))
+    chosen = np.random.choice(total_poly_pixels, size=n_centers, replace=False)
+    center_xs = inside_xs[chosen]
+    center_ys = inside_ys[chosen]
+
+    radius = config.spot_size
+    H, W = config.grid_height, config.grid_width
+    lesion_map = np.zeros((H, W), dtype=bool)
+    Y_all, X_all = np.ogrid[:H, :W]
+    for cx_c, cy_c in zip(center_xs, center_ys):
+        lesion_map[(X_all - cx_c) ** 2 + (Y_all - cy_c) ** 2 <= radius ** 2] = True
+
+    lesioned_in_poly = int(np.sum(lesion_map[inside_ys, inside_xs]))
+    lesion_fraction = lesioned_in_poly / total_poly_pixels if total_poly_pixels > 0 else 0.0
+    print(f"[Estimación previa] Área del cuerpo calloso lesionada: {lesion_fraction * 100:.1f}%  "
+          f"({lesioned_in_poly}/{total_poly_pixels} píxeles)")
+    return lesion_fraction
+
+
 def get_right_grey_matter_coords(config):
     """
     Devuelve las coordenadas (x, y) de materia gris del hemisferio derecho.
@@ -62,14 +251,22 @@ def run_brain_test():
     Ejecuta el experimento: pulsos periódicos en un punto fijo, se mide correlación de Pearson
     entre dos zonas.
     """
-    app = QtWidgets.QApplication(sys.argv)
     config = Config(a=0.05, b=0.24, Du=0.75, a_white=0.22, Du_white=10.0,
                     initial_pattern="brain", spot_size=10, time_scale=100.0)
+
+    lesion_prob = 0.0
+    if TARGET_LESION_FRACTION > 0.0:
+        lesion_prob = find_lesion_probability(config, CORPUS_CALLOSUM_COORDS, TARGET_LESION_FRACTION)
+
+    app = QtWidgets.QApplication(sys.argv)
     widget = GridWidget(config)
     widget.show()
     app.processEvents()
     while not widget._is_initialized:
         app.processEvents()
+
+    if lesion_prob > 0.0:
+        apply_corpus_callosum_lesion(widget, CORPUS_CALLOSUM_COORDS, lesion_prob)
 
     t_warmup = 40.0   # segundos reales de calentamiento
     t_simulation = 60.0
