@@ -170,55 +170,129 @@ def compare_critical_periods():
     plt.tight_layout()
     plt.show()
 
-def plot_individual_data(fit_bool=False):
-    folder_path = QtWidgets.QFileDialog.getExistingDirectory(
-        None,
-        "Seleccionar carpeta con archivos CSV")
+def _parse_density_token(density_token, force_percentage=False):
+    """Convierte tokens de densidad a fracción (p.ej. '30'->0.30, '0.15'->0.15)."""
+    token_str = str(density_token)
+    raw_density = float(token_str)
+
+    if force_percentage:
+        return raw_density / 100
+
+    # Convención: enteros en nombres (p.ej. density30, density1) representan porcentaje.
+    if '.' not in token_str:
+        return raw_density / 100
+
+    # Si viene decimal > 1, también se interpreta como porcentaje (p.ej. 15.0 -> 0.15).
+    return raw_density / 100 if raw_density > 1 else raw_density
+
+def _extract_refractory_curves_by_density(folder_path, density_override=None):
+    """Construye curvas promedio (y sigma) de células activas por periodo refractario para cada densidad."""
+    data_by_density = {}
+
+    for filename in os.listdir(folder_path):
+        if not filename.endswith('.csv'):
+            continue
+
+        file_path = os.path.join(folder_path, filename)
+        refr_match = re.search(r'refr(\d+)', filename)
+        density_match = re.search(r'density(\d+(?:\.\d+)?)', filename)
+
+        if not refr_match:
+            continue
+
+        refractory = int(refr_match.group(1))
+        if density_override is not None:
+            density = density_override
+        else:
+            if not density_match:
+                continue
+            density = _parse_density_token(density_match.group(1))
+
+        try:
+            data = pd.read_csv(file_path)
+            if 'Active_cells' not in data.columns:
+                continue
+
+            active_cells = data['Active_cells'].values
+            size_match = re.search(r'size(\d+)x(\d+)', filename)
+            if size_match:
+                total_cells = int(size_match.group(1)) * int(size_match.group(2))
+            else:
+                # Fallback por si el tamaño no está en el nombre.
+                state_columns = ['Active_cells', 'Refractory_cells', 'Resting_cells']
+                if all(col in data.columns for col in state_columns):
+                    total_cells = np.mean((
+                        data['Active_cells'] + data['Refractory_cells'] + data['Resting_cells']
+                    ).values)
+                else:
+                    continue
+
+            active_proportion = active_cells / total_cells
+            average_active = np.mean(active_proportion[-100:])
+
+            if density not in data_by_density:
+                data_by_density[density] = {}
+            if refractory not in data_by_density[density]:
+                data_by_density[density][refractory] = []
+
+            data_by_density[density][refractory].append(average_active)
+
+        except Exception as e:
+            print(f"Error al procesar el archivo {filename}: {e}")
+
+    curves_by_density = {}
+    for density, refr_dict in data_by_density.items():
+        sorted_refr = sorted(refr_dict.keys())
+        mean_averages = [np.mean(refr_dict[refr]) for refr in sorted_refr]
+        std_averages = [np.std(refr_dict[refr]) for refr in sorted_refr]
+        curves_by_density[density] = {
+            'refractory': sorted_refr,
+            'mean': mean_averages,
+            'std': std_averages,
+        }
+
+    return curves_by_density
+
+def _get_critical_refractory(periods, means, tol=1e-12):
+    """Primer periodo refractario a partir del cual la curva permanece en 0."""
+    for idx, avg in enumerate(means):
+        if avg <= tol and np.all(np.array(means[idx:]) <= tol):
+            return periods[idx]
+    return None
+
+def plot_individual_data(fit_bool=False, folder_path=None, show_plot=True):
+    if folder_path is None:
+        folder_path = QtWidgets.QFileDialog.getExistingDirectory(
+            None,
+            "Seleccionar carpeta con archivos CSV")
 
     if not folder_path:
         print("No se seleccionó ninguna carpeta.")
-        return
+        return {}
 
-    data_by_refr = {}
-    for filename in os.listdir(folder_path):
-        if filename.endswith('.csv'):
-            file_path = os.path.join(folder_path, filename)
-            match = re.search(r'refr(\d+)_run(\d+)', filename)
-            size_match = re.search(r'size(\d+)x(\d+)', filename)
-            if match and size_match:
-                refractory = int(match.group(1))
-                width = int(size_match.group(1))
-                height = int(size_match.group(2))
-                size_label = f"{width}x{height}"
+    curves_by_density = _extract_refractory_curves_by_density(folder_path)
 
-                try:
-                    data = pd.read_csv(file_path)
+    if not curves_by_density:
+        print("No se encontraron curvas válidas en la carpeta seleccionada.")
+        return {}
 
-                    if 'Active_cells' in data.columns:
-                        active_cells = data['Active_cells'].values
-                        total_cells = int(size_match.group(1)) * int(size_match.group(2))
-                        active_proportion = active_cells / total_cells
+    if not show_plot:
+        return curves_by_density
 
-                        last_hundred_steps = active_proportion[-100:]
-                        average_active = np.mean(last_hundred_steps)
-                        if refractory not in data_by_refr:
-                            data_by_refr[refractory] = []
-                        data_by_refr[refractory].append(average_active)
+    sorted_densities = sorted(curves_by_density.keys())
+    density_to_plot = sorted_densities[0]
+    if len(sorted_densities) > 1:
+        print(
+            "Se encontraron múltiples densidades; "
+            f"se graficará solo density={density_to_plot:.4g}."
+        )
 
-                        #print(f"Archivo: {filename}, Período refractario: {refractory}, Proporción promedio de células activas: {average_active}")
-
-                except Exception as e:
-                    print(f"Error al procesar el archivo {filename}: {e}")
-
-    # Sort refractory values
-    sorted_refr = sorted(data_by_refr.keys())
-    n_runs = len(data_by_refr[sorted_refr[0]])  # number of runs per refractory
+    sorted_refr = curves_by_density[density_to_plot]['refractory']
+    mean_averages = curves_by_density[density_to_plot]['mean']
+    std_averages = curves_by_density[density_to_plot]['std']
 
     plt.figure(figsize=(11.69, 8.27))
 
-    # Plot the mean across all runs
-    mean_averages = [np.mean(data_by_refr[refr]) for refr in sorted_refr]
-    std_averages = [np.std(data_by_refr[refr]) for refr in sorted_refr]
     plt.errorbar(sorted_refr, mean_averages, yerr=std_averages, fmt='o',
                  color='blue', ecolor='black', linewidth=2, capsize=5,
                  label='Promedio $\\pm \\sigma$', zorder=10)
@@ -239,13 +313,19 @@ def plot_individual_data(fit_bool=False):
             traceback.print_exc()
             print(f"Error al ajustar la curva: {e}")
 
-    plt.title(f'Proporción promedio de células activas ({size_label})', fontsize=18, fontweight='bold')
+    plt.title(
+        f'Proporción promedio de células activas (densidad={density_to_plot:.4g})',
+        fontsize=18,
+        fontweight='bold'
+    )
     plt.xlabel('Período refractario', fontsize=14)
     plt.ylabel('Proporción promedio de células activas (últimos 100 pasos)', fontsize=14)
     plt.grid(True)
     plt.legend(fontsize=12)
     plt.tight_layout()
     plt.show()
+
+    return curves_by_density
 
 def select_general_folder():
     folder_path = QtWidgets.QFileDialog.getExistingDirectory(
@@ -298,6 +378,81 @@ def plot_data_replicate():
         print(f"shannon_entropy[-1]: {shannon_entropy[-1]}")
         plt.show()
 
+def plot_density_dependence():
+    """
+    Funcion para graficar el periodo refractario critico en funcion de la densidad inicial
+    """
+    root_folder = QtWidgets.QFileDialog.getExistingDirectory(
+        None,
+        "Seleccionar carpeta raíz con subcarpetas CSVs_GH_densidad_XX"
+    )
+
+    if not root_folder:
+        print("No se seleccionó ninguna carpeta.")
+        return
+
+    relevant_folders = []
+    for item in os.listdir(root_folder):
+        full_path = os.path.join(root_folder, item)
+        density_folder_match = re.fullmatch(r'CSVs_GH_densidad_(\d+(?:\.\d+)?)', item)
+        if os.path.isdir(full_path) and density_folder_match:
+            density = _parse_density_token(density_folder_match.group(1), force_percentage=True)
+            relevant_folders.append((density, full_path, item))
+
+    if not relevant_folders:
+        print("No se encontraron subcarpetas con formato CSVs_GH_densidad_XX.")
+        return
+
+    critical_periods_by_density = {}
+
+    for density, folder_path, folder_name in sorted(relevant_folders, key=lambda x: x[0]):
+        curves_by_density = _extract_refractory_curves_by_density(folder_path, density_override=density)
+        if density not in curves_by_density:
+            print(f"No se pudieron construir curvas en {folder_name}.")
+            continue
+
+        periods = curves_by_density[density]['refractory']
+        means = curves_by_density[density]['mean']
+        critical_period = _get_critical_refractory(periods, means)
+
+        if critical_period is not None:
+            if density not in critical_periods_by_density:
+                critical_periods_by_density[density] = []
+            critical_periods_by_density[density].append(critical_period)
+
+    if not critical_periods_by_density:
+        print("No se encontró un período refractario crítico para ninguna densidad.")
+        return
+
+    critical_densities = sorted(critical_periods_by_density.keys())
+    critical_period_means = [np.mean(critical_periods_by_density[d]) for d in critical_densities]
+    critical_period_stds = [np.std(critical_periods_by_density[d]) for d in critical_densities]
+
+    plt.figure(figsize=(11.69, 8.27))
+    has_repetitions = any(len(vals) > 1 for vals in critical_periods_by_density.values())
+    if has_repetitions:
+        plt.errorbar(
+            critical_densities,
+            critical_period_means,
+            yerr=critical_period_stds,
+            marker='o',
+            linestyle='-',
+            color='blue',
+            ecolor='black',
+            capsize=4,
+            label='Promedio $\\pm \\sigma$'
+        )
+        plt.legend()
+    else:
+        plt.plot(critical_densities, critical_period_means, marker='o', linestyle='-', color='blue')
+
+    plt.title('Período refractario crítico en función de la densidad inicial', fontsize=18, fontweight='bold')
+    plt.xlabel('Densidad inicial', fontsize=14)
+    plt.ylabel('Período refractario crítico', fontsize=14)
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
 def curve_fit_function(x, a, b, c):
     return a * (x**(-b)) * np.exp(-x/c)
 
@@ -309,7 +464,8 @@ def main():
     #plot_data_average(fit_bool=True)
     #plot_data_replicate()
     #compare_critical_periods()
-    plot_individual_data(fit_bool=True)
+    #plot_individual_data(fit_bool=True)
+    plot_density_dependence()
 
 if __name__=="__main__":
     main()
