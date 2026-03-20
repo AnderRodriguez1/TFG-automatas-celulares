@@ -296,13 +296,15 @@ def plot_individual_data(fit_bool=False, folder_path=None, show_plot=True):
     plt.errorbar(sorted_refr, mean_averages, yerr=std_averages, fmt='o',
                  color='blue', ecolor='black', linewidth=2, capsize=5,
                  label='Promedio $\\pm \\sigma$', zorder=10)
-
+    critical_period = None
     if fit_bool:
         try:
             # Find critical period (first refr where mean is 0)
             nonzero = [(r, m) for r, m in zip(sorted_refr, mean_averages) if m > 0]
             if nonzero:
                 clean_refr, clean_avg = zip(*nonzero)
+                clean_refr = np.array(clean_refr)
+                clean_avg = np.array(clean_avg)
                 p_c_guess = clean_refr[-1] + 1  # Just past the last nonzero point
                 p_0 = [0.5, 0.5, 0.01, p_c_guess, 0.5]
                 bounds_lower = [0.0001, 0.0001, 0.0, clean_refr[-1], 0.0001]
@@ -312,6 +314,17 @@ def plot_individual_data(fit_bool=False, folder_path=None, show_plot=True):
                 fit_x = np.linspace(min(sorted_refr), max(sorted_refr), 200)
                 fit_curve = curve_fit_function(fit_x, *fit_params[0])
                 print(f"Parámetros de ajuste: {fit_params[0]}")
+
+                # El ajuste log-log con beta sale medio pocho por la variacion, igual con muchas mas muestras se podría mejorar
+                # critical_period = fit_params[0][3]
+                # log_mask = (clean_refr > critical_period - 15) & (clean_refr < critical_period - 12)
+                # log_density = np.log(clean_avg)[log_mask]
+                # log_refr = np.log(critical_period - np.array(clean_refr)[log_mask])
+
+                # slope = np.polyfit(log_refr, log_density, 1)[0]
+                # print(f"Exponente crítico (beta): {slope:.4f}")
+
+
                 plt.plot(fit_x, fit_curve, linestyle='--', color='red', linewidth=2, label='Curva ajustada')
         except Exception as e:
             import traceback
@@ -329,6 +342,16 @@ def plot_individual_data(fit_bool=False, folder_path=None, show_plot=True):
     plt.legend(fontsize=12)
     plt.tight_layout()
     plt.show()
+
+    # if critical_period is not None:
+    #     plt.figure(figsize=(11.69, 8.27))
+    #     plt.plot(log_refr, log_density, 'o-', color='green', label='Datos para log-log')
+    #     plt.xlabel('log(Período refractario crítico - Refractario)', fontsize=14)
+    #     plt.ylabel('log(Proporción de células activas)', fontsize=14)
+    #     plt.title('Relación log-log cerca del período refractario crítico', fontsize=18, fontweight='bold')
+    #     plt.grid(True)
+    #     plt.tight_layout()
+    #     plt.show()
 
     return curves_by_density
 
@@ -457,6 +480,87 @@ def plot_density_dependence():
     plt.tight_layout()
     plt.show()
 
+def plot_data_collapse():
+    """
+    Función para graficar el colapso de datos usando los parámetros reales (A y tau)
+    ajustados individualmente para cada densidad.
+    Eje X: R / R_c
+    Eje Y: (rho * R^tau) / A
+    """
+    root_folder = QtWidgets.QFileDialog.getExistingDirectory(
+        None,
+        "Seleccionar carpeta raíz con subcarpetas CSVs_GH_densidad_XX\n(Para el colapso de datos)"
+    )
+
+    if not root_folder:
+        return
+
+    relevant_folders =[]
+    for item in os.listdir(root_folder):
+        full_path = os.path.join(root_folder, item)
+        density_folder_match = re.fullmatch(r'CSVs_GH_densidad_(\d+(?:\.\d+)?)', item)
+        if os.path.isdir(full_path) and density_folder_match:
+            density = _parse_density_token(density_folder_match.group(1), force_percentage=True)
+            relevant_folders.append((density, full_path, item))
+
+    if not relevant_folders:
+        return
+
+    plt.figure(figsize=(11.69, 8.27))
+
+    for density, folder_path, folder_name in sorted(relevant_folders, key=lambda x: x[0]):
+        curves_by_density = _extract_refractory_curves_by_density(folder_path, density_override=density)
+        if density not in curves_by_density:
+            continue
+
+        periods = np.array(curves_by_density[density]['refractory'])
+        means = np.array(curves_by_density[density]['mean'])
+        
+        # Filtrar régimen activo
+        mask = means > 0
+        if not np.any(mask):
+            continue
+            
+        clean_refr = periods[mask]
+        clean_avg = means[mask]
+        
+        # 1. Ajustar la curva para ESTA densidad y sacar sus parámetros reales
+        try:
+            p_c_guess = clean_refr[-1] + 1.0  
+            p_0 =[0.5, 0.5, 0.01, p_c_guess, 0.5]
+            bounds_lower =[0.001, 0.001, 0.0, clean_refr[-1], 0.001]
+            bounds_upper =[10.0, 5.0, 1.0, 250.0, 5.0]
+            
+            fit_params, _ = curve_fit(curve_fit_function, clean_refr, clean_avg,
+                                      p0=p_0, bounds=(bounds_lower, bounds_upper), maxfev=100000)
+            
+            A_opt = fit_params[0]
+            tau_opt = fit_params[1]
+            c_opt = fit_params[2]
+            Rc_opt = fit_params[3]
+            beta_opt = fit_params[4]  # ¡Extraemos el exponente crítico de la transición!
+            
+            # 2. TRANSFORMACIÓN DE COLAPSO EXACTA Y NORMALIZADA
+            X = 1 - clean_refr / Rc_opt
+            
+            # El Eje Y aísla puramente la función (1 - R/Rc)^beta
+            Y = (clean_avg * (clean_refr ** tau_opt) * np.exp(clean_refr * c_opt)) / (A_opt * (Rc_opt ** beta_opt))
+            
+            plt.plot(X, Y, marker='o', linestyle='-', alpha=0.8, 
+                     label=f'Densidad {density:.2f} ($\\tau$={tau_opt:.2f}, $R_c$={Rc_opt:.1f})')
+                     
+        except Exception as e:
+            print(f"Fallo al ajustar la densidad {density}: {e}")
+            continue
+
+    plt.title('Colapso de Datos', fontsize=18, fontweight='bold')
+    plt.xlabel('$1 - R / R_c$ (Periodo Refractario Normalizado)', fontsize=14)
+    plt.ylabel('$\\rho \\cdot R^{\\tau} \\cdot e^{cR} / A \\cdot R_c^{\\beta}$ (Amplitud Reescalada)', fontsize=14)
+    plt.grid(True)
+    plt.legend(fontsize=10)
+    plt.tight_layout()
+    plt.show()
+
 def curve_fit_function(x, a, b, c, p_c, beta):
     # CUANDO SE QUITA C, EL AJUSTE ES BASICAMENTE IGUAL, PREGUNTAR ESO
     base = np.maximum(p_c - x, 0)
@@ -470,8 +574,9 @@ def main():
     #plot_data_average(fit_bool=True)
     #plot_data_replicate()
     #compare_critical_periods()
-    plot_individual_data(fit_bool=True)
+    #plot_individual_data(fit_bool=True)
     #plot_density_dependence()
+    plot_data_collapse()
 
 if __name__=="__main__":
     main()
