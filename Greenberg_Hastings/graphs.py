@@ -303,7 +303,12 @@ def plot_individual_data(fit_bool=False, folder_path=None, show_plot=True):
             nonzero = [(r, m) for r, m in zip(sorted_refr, mean_averages) if m > 0]
             if nonzero:
                 clean_refr, clean_avg = zip(*nonzero)
-                fit_params = curve_fit(curve_fit_function, clean_refr, clean_avg, maxfev=10000)
+                p_c_guess = clean_refr[-1] + 1  # Just past the last nonzero point
+                p_0 = [0.5, 0.5, 0.01, p_c_guess, 0.5]
+                bounds_lower = [0.0001, 0.0001, 0.0, clean_refr[-1], 0.0001]
+                bounds_upper = [10, 5, 1, 250, 5]
+                fit_params = curve_fit(curve_fit_function, clean_refr, clean_avg,
+                                        p0=p_0, bounds=(bounds_lower, bounds_upper), maxfev=100000)
                 fit_x = np.linspace(min(sorted_refr), max(sorted_refr), 200)
                 fit_curve = curve_fit_function(fit_x, *fit_params[0])
                 print(f"Parámetros de ajuste: {fit_params[0]}")
@@ -436,7 +441,6 @@ def plot_density_dependence():
             critical_period_means,
             yerr=critical_period_stds,
             marker='o',
-            linestyle='-',
             color='blue',
             ecolor='black',
             capsize=4,
@@ -453,8 +457,10 @@ def plot_density_dependence():
     plt.tight_layout()
     plt.show()
 
-def curve_fit_function(x, a, b, c):
-    return a * (x**(-b)) * np.exp(-x/c)
+def curve_fit_function(x, a, b, c, p_c, beta):
+    # CUANDO SE QUITA C, EL AJUSTE ES BASICAMENTE IGUAL, PREGUNTAR ESO
+    base = np.maximum(p_c - x, 0)
+    return a * (x**(-b)) * np.exp(-x*c) * (base)**beta
 
 def fss_function(x, a, b, c):
     return a - b * (x**(-c))
@@ -464,8 +470,8 @@ def main():
     #plot_data_average(fit_bool=True)
     #plot_data_replicate()
     #compare_critical_periods()
-    #plot_individual_data(fit_bool=True)
-    plot_density_dependence()
+    plot_individual_data(fit_bool=True)
+    #plot_density_dependence()
 
 if __name__=="__main__":
     main()
