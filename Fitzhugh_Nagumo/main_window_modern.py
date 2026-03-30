@@ -47,6 +47,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.toggle_brain_boundary_action.triggered.connect(self.toggle_brain_boundary)
         view_menu.addAction(self.toggle_brain_boundary_action)
 
+        self.toggle_voltage_rois_action = QtGui.QAction("Mostrar zonas de medida de voltaje", self)
+        self.toggle_voltage_rois_action.setCheckable(True)
+        self.toggle_voltage_rois_action.setShortcut("V")
+        self.toggle_voltage_rois_action.triggered.connect(self.toggle_voltage_rois)
+        view_menu.addAction(self.toggle_voltage_rois_action)
+
         # Añadir todo a los widgets
         container = QtWidgets.QWidget()
 
@@ -147,6 +153,14 @@ class MainWindow(QtWidgets.QMainWindow):
         Activa/desactiva la visualización de la frontera entre materia gris y blanca
         """
         self.grid_widget.show_brain_boundary = self.toggle_brain_boundary_action.isChecked()
+        self.grid_widget.update()
+
+    @QtCore.Slot()
+    def toggle_voltage_rois(self):
+        """
+        Activa/desactiva la visualización de zonas donde se mide el voltaje.
+        """
+        self.grid_widget.show_voltage_rois = self.toggle_voltage_rois_action.isChecked()
         self.grid_widget.update()
 
     @QtCore.Slot(int, int)

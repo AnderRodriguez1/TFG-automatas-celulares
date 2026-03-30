@@ -10,6 +10,27 @@ import numpy as np
 import time
 from scipy.ndimage import binary_dilation
 
+# Regiones donde se miden voltajes en el experimento de cerebro.
+DEFAULT_VOLTAGE_ROIS = [
+    (265, 65,  "R1"),
+    (340, 180, "R2"),
+    (260, 250, "R3"),
+    (320, 400, "R4"),
+    (280, 160, "R5"),
+    (245, 370, "R6"),
+    (265, 320, "R7"),
+    (275, 460, "R8"),
+    (225, 65,  "L1"),
+    (120, 180, "L2"),
+    (210, 250, "L3"),
+    (145, 400, "L4"),
+    (202, 140, "L5"),
+    (217, 370, "L6"),
+    (200, 320, "L7"),
+    (200, 460, "L8"),
+]
+DEFAULT_VOLTAGE_ZONE_SIZE = 5
+
 def load_shader_source(shader_file: str) -> str:
     """
     Lee el contenido de un archivo de shader
@@ -58,8 +79,11 @@ class GridWidget(QOpenGLWidget):
         self.use_brain_texture = False
         self.show_brain_regions = False  # Toggle para visualizar regiones del cerebro
         self.show_brain_boundary = False  # Toggle para visualizar frontera gris/blanca
+        self.show_voltage_rois = False  # Toggle para visualizar zonas de medida de voltaje
         self.no_diffusion_mask = None    # Textura separada para máscara de no-difusión
         self.no_diffusion_data = None    # Array numpy backing de la máscara
+        self.voltage_roi_mask = None     # Textura 1 canal para overlay de ROIs
+        self.voltage_roi_mask_data = None
         self.noise_pool = []          # Pool de texturas de ruido pre-generadas
         self.noise_pool_size = 8       # Número de texturas en el pool
         self.noise_pool_idx = 0
@@ -139,6 +163,13 @@ class GridWidget(QOpenGLWidget):
                 data=self.no_diffusion_data.tobytes()
             )
             self.no_diffusion_mask.filter = (moderngl.NEAREST, moderngl.NEAREST)
+            # Máscara de ROIs de voltaje para overlay visual
+            self._build_voltage_roi_mask(DEFAULT_VOLTAGE_ROIS, DEFAULT_VOLTAGE_ZONE_SIZE)
+            self.voltage_roi_mask = self.ctx.texture(
+                (self.config.grid_width, self.config.grid_height), 1, dtype='f4',
+                data=self.voltage_roi_mask_data.tobytes()
+            )
+            self.voltage_roi_mask.filter = (moderngl.NEAREST, moderngl.NEAREST)
             # Pre-generar pool de texturas de ruido (distribución normal)
             for _ in range(self.noise_pool_size):
                 noise = np.random.randn(self.config.grid_height, self.config.grid_width, 4).astype('f4') * self.config.noise_amplitude
@@ -218,6 +249,7 @@ class GridWidget(QOpenGLWidget):
         self.display_program['u_use_brain'].value = use_brain
         self.display_program['u_show_brain_regions'].value = self.show_brain_regions
         self.display_program['u_show_brain_boundary'].value = self.show_brain_boundary
+        self.display_program['u_show_voltage_rois'].value = self.show_voltage_rois
         if use_brain:
             self.display_program['u_black_threshold'].value = self.config.brain_black_threshold
             self.display_program['u_white_threshold'].value = self.config.brain_white_threshold
@@ -231,7 +263,26 @@ class GridWidget(QOpenGLWidget):
         self.no_diffusion_mask.use(location=2)
         self.display_program['u_no_diffusion_mask'].value = 2
 
+        # Mascara de zonas de voltaje
+        if self.voltage_roi_mask is not None:
+            self.voltage_roi_mask.use(location=3)
+            self.display_program['u_voltage_roi_mask'].value = 3
+
         self.display_vao.render(moderngl.TRIANGLES)
+
+    def _build_voltage_roi_mask(self, rois, zone_size):
+        """
+        Construye una máscara binaria con cuadrados centrados en cada ROI.
+        """
+        h, w = self.config.grid_height, self.config.grid_width
+        mask = np.zeros((h, w), dtype='f4')
+        for x, y, _ in rois:
+            x0 = max(0, x - zone_size)
+            x1 = min(w, x + zone_size + 1)
+            y0 = max(0, y - zone_size)
+            y1 = min(h, y + zone_size + 1)
+            mask[y0:y1, x0:x1] = 1.0
+        self.voltage_roi_mask_data = mask
 
     def _release_resources(self):
 
@@ -264,6 +315,8 @@ class GridWidget(QOpenGLWidget):
                 self.no_diffusion_vao.release()
             if self.no_diffusion_mask:
                 self.no_diffusion_mask.release()
+            if self.voltage_roi_mask:
+                self.voltage_roi_mask.release()
             if self.ctx: 
                 self.ctx.release()
             for noise_tex in self.noise_pool:

@@ -11,9 +11,9 @@ from grid_widget_modern import GridWidget
 
 NUM_STEPS = 2000
 
-INITIAL_DENSITY = 0.15
+INITIAL_DENSITY = 0.01
 
-REFRACTORY_PERIODS = np.linspace(1, 100, 100, dtype=int)
+REFRACTORY_PERIODS = np.linspace(1, 300, 300, dtype=int)
 GRID_SIZES = np.linspace(100, 2000, 20, dtype=int)
 SINGLE_GRID = 500
 REPETITIONS = 10

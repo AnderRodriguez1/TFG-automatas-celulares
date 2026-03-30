@@ -13,6 +13,12 @@ from config_modern import Config
 import sys
 from PySide6 import QtWidgets, QtCore
 import matplotlib.pyplot as plt
+from matplotlib.widgets import CheckButtons
+
+np.random.seed(46)  # Para reproducibilidad
+# Semillas importantes
+# 45: zona R6 sale muy decorrelacionada del resto, las demas salen bien entre si
+# 46: Hay decorrelacion entre zonas, ademas las zonas izquierdas salen algo menos correlacionadas entre si que las derechas, lo cual es interesante porque el pulso se da en el hemisferio derecho. La zona R6 vuelve a salir un poco menos correlacionada que el resto, aunque no tanto como con la semilla 45. En general parece un resultado más realista que con la semilla 45, donde todas las zonas estaban demasiado sincronizadas entre si
 
 X_PULSE = 340
 Y_PULSE = 180
@@ -38,7 +44,6 @@ ROIS =[# De 0 a 3, derecho, de 4 a 7, izquierdo
 N_ROIS = len(ROIS)
 
 ZONE_SIZE = 5
-PULSE_INTERVAL_SIM = 200  # Tiempo simulado entre pulsos (unidades del modelo)
 PULSE_PROBABILITY = 0.005  # Probabilidad de pulso aleatorio por frame
 PULSE_MODE = "periodic"  # "periodic" o "random_right"
 
@@ -268,10 +273,11 @@ def run_brain_test():
     if lesion_prob > 0.0:
         apply_corpus_callosum_lesion(widget, CORPUS_CALLOSUM_COORDS, lesion_prob)
 
-    t_warmup = 40.0   # segundos reales de calentamiento
-    t_simulation = 60.0
+    t_warmup = 40.0 * 100 / config.time_scale   # segundos reales de calentamiento
+    t_simulation = 120.0 * 100 / config.time_scale  # segundos reales de simulación tras calentamiento
     signals = [[] for _ in range(N_ROIS)]
     measuring = [False]  # lista para poder modificar desde closure
+    PULSE_INTERVAL_SIM = 200 * 100 / config.time_scale # Tiempo simulado entre pulsos (unidades del modelo)
 
     # Configurar pulsos según el modo
     pulse_timer = QtCore.QTimer()
@@ -374,32 +380,71 @@ def run_brain_test():
 def plot_results(sig_arr, FC_matrix):
     labels = [r[2] for r in ROIS]
 
-    fig, axes = plt.subplots(1, 2, figsize=(15, 6))
+    # Figura 1: voltaje en el tiempo con control de visibilidad por ROI
+    fig_voltage, ax_voltage = plt.subplots(figsize=(12, 6))
 
-    axes[0].plot(sig_arr[1], label=labels[1], color='blue')       # R2
-    axes[0].plot(sig_arr[2], label=labels[2], color='cyan')       # R3
-    axes[0].plot(sig_arr[5], label=labels[5], color='red', linestyle='--')  # L2
-    axes[0].plot(sig_arr[6], label=labels[6], color='orange', linestyle='--') # L3
-    axes[0].set_xlabel("Muestra")
-    axes[0].set_ylabel("Voltaje (u)")
-    axes[0].set_title("Ondas propágandose (Muestra representativa)")
-    axes[0].legend()
-    axes[0].grid(True, alpha=0.3)
+    cmap = plt.get_cmap("tab20")
+    lines = []
+    for i, arr in enumerate(sig_arr):
+        color = cmap(i % cmap.N)
+        line, = ax_voltage.plot(arr, color=color, alpha=0.9, linewidth=1.3, label=labels[i])
+        lines.append(line)
+    ax_voltage.set_xlabel("Muestra")
+    ax_voltage.set_ylabel("Voltaje (u)")
+    ax_voltage.set_title("Ondas propagandose por ROI")
+    ax_voltage.legend(loc="upper right", fontsize=8, ncol=2)
+    ax_voltage.grid(True, alpha=0.3)
 
-    cax = axes[1].imshow(FC_matrix, cmap='viridis', vmin=0, vmax=1)
-    axes[1].set_xticks(np.arange(N_ROIS))
-    axes[1].set_yticks(np.arange(N_ROIS))
-    axes[1].set_xticklabels(labels, rotation=45, ha="right")
-    axes[1].set_yticklabels(labels)
-    axes[1].set_title("Matriz de Conectividad Funcional (FC)")
-    fig.colorbar(cax, ax=axes[1], fraction=0.046, pad=0.04)
+    # Menu interactivo para activar/desactivar curvas individuales
+    fig_voltage.subplots_adjust(right=0.82)
+    check_ax = fig_voltage.add_axes([0.84, 0.12, 0.14, 0.76])
+    check_ax.set_title("ROIs", fontsize=9)
+    check = CheckButtons(check_ax, labels, [True] * len(lines))
+
+    for txt in check.labels:
+        txt.set_fontsize(8)
+
+    def toggle_curve(label):
+        idx = labels.index(label)
+        line = lines[idx]
+        line.set_visible(not line.get_visible())
+        fig_voltage.canvas.draw_idle()
+
+    check.on_clicked(toggle_curve)
+
+    # Figura 2: matriz de conectividad funcional
+    fig_fc, ax_fc = plt.subplots(figsize=(8, 7))
+    cax = ax_fc.imshow(FC_matrix, cmap='viridis', vmin=0, vmax=1)
+    ax_fc.set_xticks(np.arange(N_ROIS))
+    ax_fc.set_yticks(np.arange(N_ROIS))
+    ax_fc.set_xticklabels(labels, rotation=45, ha="right")
+    ax_fc.set_yticklabels(labels)
+    ax_fc.set_title("Matriz de Conectividad Funcional (FC)")
+    fig_fc.colorbar(cax, ax=ax_fc, fraction=0.046, pad=0.04)
 
     for i in range(N_ROIS):
         for j in range(N_ROIS):
-            axes[1].text(j, i, f"{FC_matrix[i, j]:.2f}", 
-                         ha="center", va="center", color="white" if FC_matrix[i,j] < 0.8 else "black", fontsize=8)
-            
-    plt.tight_layout()
+            ax_fc.text(j, i, f"{FC_matrix[i, j]:.2f}", 
+                       ha="center", va="center", color="white" if FC_matrix[i,j] < 0.8 else "black", fontsize=8)
+
+    fig_fc.tight_layout()
+
+    # Figura 3: espectro FFT por ROI
+    fig_fft, ax_fft = plt.subplots(figsize=(12, 6))
+    for i, arr in enumerate(sig_arr):
+        color = cmap(i % cmap.N)
+        centered = arr - np.mean(arr)
+        fft_mag = np.abs(np.fft.rfft(centered)) / max(len(centered), 1)
+        freqs = np.fft.rfftfreq(len(centered), d=1.0)
+        ax_fft.plot(freqs, fft_mag, color=color, linewidth=1.2, alpha=0.9, label=labels[i])
+
+    ax_fft.set_xlabel("Frecuencia (ciclos por muestra)")
+    ax_fft.set_ylabel("Magnitud FFT")
+    ax_fft.set_title("Espectro FFT por ROI")
+    ax_fft.grid(True, alpha=0.3)
+    ax_fft.legend(loc="upper right", fontsize=8, ncol=2)
+    fig_fft.tight_layout()
+
     plt.show()
 
 if __name__ == "__main__":

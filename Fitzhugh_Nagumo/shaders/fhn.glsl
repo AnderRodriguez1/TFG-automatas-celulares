@@ -2,6 +2,8 @@
 out vec4 FragColor;
 in vec2 TexCoords;
 
+precision highp float;
+
 uniform sampler2D u_state_texture;
 uniform sampler2D u_noise_texture; 
 uniform sampler2D u_brain_texture;   // Textura del cerebro (1 canal, intensidad 0..1)

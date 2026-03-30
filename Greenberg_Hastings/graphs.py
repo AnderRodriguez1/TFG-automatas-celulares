@@ -317,7 +317,7 @@ def plot_individual_data(fit_bool=False, folder_path=None, show_plot=True):
 
                 # El ajuste log-log con beta sale medio pocho por la variacion, igual con muchas mas muestras se podría mejorar
                 # critical_period = fit_params[0][3]
-                # log_mask = (clean_refr > critical_period - 15) & (clean_refr < critical_period - 12)
+                # log_mask = (clean_refr > critical_period - 8) & (clean_refr < critical_period - 3)
                 # log_density = np.log(clean_avg)[log_mask]
                 # log_refr = np.log(critical_period - np.array(clean_refr)[log_mask])
 
@@ -456,23 +456,44 @@ def plot_density_dependence():
     critical_period_means = [np.mean(critical_periods_by_density[d]) for d in critical_densities]
     critical_period_stds = [np.std(critical_periods_by_density[d]) for d in critical_densities]
 
+    if critical_period_means is not None:
+        params_fit = curve_fit(density_fit_function, critical_densities, critical_period_means, maxfev=10000)
+        fit_x = np.linspace(min(critical_densities), max(critical_densities), 100)
+        fit_curve = density_fit_function(fit_x, *params_fit[0])
+        print(f"Parámetros de ajuste de dependencia con densidad: {params_fit[0]}")
+
     plt.figure(figsize=(11.69, 8.27))
     has_repetitions = any(len(vals) > 1 for vals in critical_periods_by_density.values())
-    if has_repetitions:
-        plt.errorbar(
+    plt.errorbar(
             critical_densities,
             critical_period_means,
             yerr=critical_period_stds,
             marker='o',
+            linestyle='none',
             color='blue',
             ecolor='black',
             capsize=4,
             label='Promedio $\\pm \\sigma$'
         )
+    plt.legend()
+    # if has_repetitions:
+    #     plt.errorbar(
+    #         critical_densities,
+    #         critical_period_means,
+    #         yerr=critical_period_stds,
+    #         marker='o',
+    #         color='blue',
+    #         ecolor='black',
+    #         capsize=4,
+    #         label='Promedio $\\pm \\sigma$'
+    #     )
+    #     plt.legend()
+    # else:
+    #     plt.plot(critical_densities, critical_period_means, marker='o', linestyle='-', color='blue')
+    if params_fit is not None:
+        plt.plot(fit_x, fit_curve, linestyle='--', color='red', label='Curva ajustada')
         plt.legend()
-    else:
-        plt.plot(critical_densities, critical_period_means, marker='o', linestyle='-', color='blue')
-
+        
     plt.title('Período refractario crítico en función de la densidad inicial', fontsize=18, fontweight='bold')
     plt.xlabel('Densidad inicial', fontsize=14)
     plt.ylabel('Período refractario crítico', fontsize=14)
@@ -484,8 +505,8 @@ def plot_data_collapse():
     """
     Función para graficar el colapso de datos usando los parámetros reales (A y tau)
     ajustados individualmente para cada densidad.
-    Eje X: R / R_c
-    Eje Y: (rho * R^tau) / A
+    Eje X: 1 - R / R_c
+    Eje Y: (rho * R^tau) / (A * R_c^beta)
     """
     root_folder = QtWidgets.QFileDialog.getExistingDirectory(
         None,
@@ -527,27 +548,27 @@ def plot_data_collapse():
         # 1. Ajustar la curva para ESTA densidad y sacar sus parámetros reales
         try:
             p_c_guess = clean_refr[-1] + 1.0  
-            p_0 =[0.5, 0.5, 0.01, p_c_guess, 0.5]
-            bounds_lower =[0.001, 0.001, 0.0, clean_refr[-1], 0.001]
-            bounds_upper =[10.0, 5.0, 1.0, 250.0, 5.0]
+            p_0 =[0.5, 0.5, p_c_guess, 0.5]
+            bounds_lower =[0.001, 0.001, clean_refr[-1], 0.001]
+            bounds_upper =[10.0, 5.0, 250.0, 5.0]
             
             fit_params, _ = curve_fit(curve_fit_function, clean_refr, clean_avg,
                                       p0=p_0, bounds=(bounds_lower, bounds_upper), maxfev=100000)
             
             A_opt = fit_params[0]
             tau_opt = fit_params[1]
-            c_opt = fit_params[2]
-            Rc_opt = fit_params[3]
-            beta_opt = fit_params[4]  # ¡Extraemos el exponente crítico de la transición!
+            #c_opt = fit_params[2]
+            Rc_opt = fit_params[2]
+            beta_opt = fit_params[3]  # ¡Extraemos el exponente crítico de la transición!
             
             # 2. TRANSFORMACIÓN DE COLAPSO EXACTA Y NORMALIZADA
             X = 1 - clean_refr / Rc_opt
             
             # El Eje Y aísla puramente la función (1 - R/Rc)^beta
-            Y = (clean_avg * (clean_refr ** tau_opt) * np.exp(clean_refr * c_opt)) / (A_opt * (Rc_opt ** beta_opt))
+            Y = (clean_avg * (clean_refr ** tau_opt)) / (A_opt * (Rc_opt ** beta_opt))
             
             plt.plot(X, Y, marker='o', linestyle='-', alpha=0.8, 
-                     label=f'Densidad {density:.2f} ($\\tau$={tau_opt:.2f}, $R_c$={Rc_opt:.1f})')
+                     label=f'Densidad {density:.2f} ($\\tau$={tau_opt:.2f}, $R_c$={Rc_opt:.1f}, $\\beta$={beta_opt:.2f}, A={A_opt:.2f})')
                      
         except Exception as e:
             print(f"Fallo al ajustar la densidad {density}: {e}")
@@ -555,19 +576,22 @@ def plot_data_collapse():
 
     plt.title('Colapso de Datos', fontsize=18, fontweight='bold')
     plt.xlabel('$1 - R / R_c$ (Periodo Refractario Normalizado)', fontsize=14)
-    plt.ylabel('$\\rho \\cdot R^{\\tau} \\cdot e^{cR} / A \\cdot R_c^{\\beta}$ (Amplitud Reescalada)', fontsize=14)
+    plt.ylabel('$\\rho \\cdot R^{\\tau} / A \\cdot R_c^{\\beta}$ (Amplitud Reescalada)', fontsize=14)
     plt.grid(True)
     plt.legend(fontsize=10)
     plt.tight_layout()
     plt.show()
 
-def curve_fit_function(x, a, b, c, p_c, beta):
+def curve_fit_function(x, a, b, p_c, beta):
     # CUANDO SE QUITA C, EL AJUSTE ES BASICAMENTE IGUAL, PREGUNTAR ESO
     base = np.maximum(p_c - x, 0)
-    return a * (x**(-b)) * np.exp(-x*c) * (base)**beta
+    return a * (x**(-b)) * (base)**beta
 
 def fss_function(x, a, b, c):
     return a - b * (x**(-c))
+
+def density_fit_function(x, a, b, c):
+    return a * x**(-b) + c
 
 def main():
     app = QtWidgets.QApplication([])
@@ -575,8 +599,8 @@ def main():
     #plot_data_replicate()
     #compare_critical_periods()
     #plot_individual_data(fit_bool=True)
-    #plot_density_dependence()
-    plot_data_collapse()
+    plot_density_dependence()
+    #plot_data_collapse()
 
 if __name__=="__main__":
     main()

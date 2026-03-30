@@ -7,12 +7,14 @@ in vec2 TexCoords;
 uniform sampler2D u_state_texture; // Textura actual del estado del grid
 uniform sampler2D u_brain_texture; // Textura del cerebro (1 canal)
 uniform sampler2D u_no_diffusion_mask; // Mascara de no-difusion (1 canal)
+uniform sampler2D u_voltage_roi_mask; // Mascara de ROIs donde se miden voltajes
 uniform float u_zoom_level; // Nivel de zoom
 uniform vec2 u_view_offset; // Offset de la vista en coordenadas de celda
 uniform vec2 u_grid_size; // Tamaño del grid
 uniform bool u_use_brain;           // Flag para activar overlay cerebral
 uniform bool u_show_brain_regions;  // Flag para mostrar regiones del cerebro
 uniform bool u_show_brain_boundary; // Flag para mostrar frontera gris/blanca
+uniform bool u_show_voltage_rois;   // Flag para mostrar ROIs de voltaje
 uniform float u_black_threshold;    // Umbral negro
 uniform float u_white_threshold;    // Umbral blanco
 
@@ -45,11 +47,7 @@ void main()
         } else {
             final_color = vec3(0.5, 0.5, 0.5); // Gris: materia gris
         }
-        FragColor = vec4(final_color, 1.0);
-        return;
-    }
-
-    if (is_blocked > 0.5){
+    } else if (is_blocked > 0.5){
         // Si esta bloqueada
         final_color = vec3(0.4, 0.4, 0.5); // Azul celeste para células bloqueadas
     }else{
@@ -108,6 +106,25 @@ void main()
 
         if (is_boundary) {
             final_color = mix(final_color, vec3(1.0, 0.0, 0.0), 0.85);
+        }
+    }
+
+    // Overlay de ROIs de voltaje (relleno tenue + borde intenso)
+    if (u_show_voltage_rois) {
+        float roi_here = texture(u_voltage_roi_mask, sample_coord).r;
+        if (roi_here > 0.5) {
+            vec2 texel = 1.0 / u_grid_size;
+            float r = texture(u_voltage_roi_mask, sample_coord + vec2(texel.x, 0.0)).r;
+            float l = texture(u_voltage_roi_mask, sample_coord - vec2(texel.x, 0.0)).r;
+            float u2 = texture(u_voltage_roi_mask, sample_coord + vec2(0.0, texel.y)).r;
+            float d = texture(u_voltage_roi_mask, sample_coord - vec2(0.0, texel.y)).r;
+            bool roi_boundary = (r < 0.5 || l < 0.5 || u2 < 0.5 || d < 0.5);
+            vec3 roi_fill_color = vec3(0.0, 0.85, 1.0);
+            vec3 roi_border_color = vec3(1.0, 0.35, 0.0);
+            final_color = mix(final_color, roi_fill_color, 0.28);
+            if (roi_boundary) {
+                final_color = mix(final_color, roi_border_color, 0.9);
+            }
         }
     }
 
