@@ -7,6 +7,7 @@ y se mide cómo afecta a la propagación de las ondas.
 import numpy as np
 from scipy.signal import correlate
 from pathlib import Path
+from datetime import datetime
 from PIL import Image
 from grid_widget_modern import GridWidget
 from config_modern import Config
@@ -15,7 +16,8 @@ from PySide6 import QtWidgets, QtCore
 import matplotlib.pyplot as plt
 from matplotlib.widgets import CheckButtons
 
-np.random.seed(46)  # Para reproducibilidad
+RANDOM_SEED = 46
+np.random.seed(RANDOM_SEED) # Para reproducibilidad
 # Semillas importantes
 # 45: zona R6 sale muy decorrelacionada del resto, las demas salen bien entre si
 # 46: Hay decorrelacion entre zonas, ademas las zonas izquierdas salen algo menos correlacionadas entre si que las derechas, lo cual es interesante porque el pulso se da en el hemisferio derecho. La zona R6 vuelve a salir un poco menos correlacionada que el resto, aunque no tanto como con la semilla 45. En general parece un resultado más realista que con la semilla 45, donde todas las zonas estaban demasiado sincronizadas entre si
@@ -46,6 +48,8 @@ N_ROIS = len(ROIS)
 ZONE_SIZE = 5
 PULSE_PROBABILITY = 0.005  # Probabilidad de pulso aleatorio por frame
 PULSE_MODE = "periodic"  # "periodic" o "random_right"
+FFT_VERTICAL_OFFSET_SCALE = 1.15  # Aumenta/reduce el desfase vertical entre curvas FFT
+FFT_VERTICAL_MIN_OFFSET = 0.05  # Separación mínima cuando la magnitud FFT es muy pequeña
 
 # Cuerpo calloso: rectángulo inclinado definido por 4 vértices (x, y) en orden
 CORPUS_CALLOSUM_COORDS = [
@@ -56,6 +60,74 @@ CORPUS_CALLOSUM_COORDS = [
 ]
 LESION_PROBABILITY = 0.001  # 0.0 = sin lesión, 1.0 = lesión total. Depreciado, ahora se calcula automáticamente para alcanzar TARGET_LESION_FRACTION
 TARGET_LESION_FRACTION = 0.7  # área deseada (0.0-1.0). Si es 0.0 no se lesiona.
+
+
+def _fmt_float_for_name(value, ndigits=3):
+    """Formatea flotantes para nombres de archivo seguros y legibles."""
+    txt = f"{float(value):.{ndigits}f}".rstrip("0").rstrip(".")
+    if txt in {"", "-0"}:
+        txt = "0"
+    return txt.replace("-", "m").replace(".", "p")
+
+
+def save_plotted_data_npz(sig_arr, FC_matrix, fft_data, fft_offset, labels, metadata, lag_matrix=None):
+    """Guarda en NPZ todos los datos usados para las gráficas."""
+    output_dir = Path(__file__).parent / "NPZs_brain_test"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    mode_tag = str(metadata.get("pulse_mode", "na"))
+    seed_tag = str(int(metadata.get("random_seed", -1)))
+    target_lesion_tag = _fmt_float_for_name(metadata.get("target_lesion_fraction", 0.0))
+    actual_lesion_tag = _fmt_float_for_name(metadata.get("actual_lesion_fraction", 0.0))
+    a_tag = _fmt_float_for_name(metadata.get("a", 0.0))
+    b_tag = _fmt_float_for_name(metadata.get("b", 0.0))
+    du_tag = _fmt_float_for_name(metadata.get("Du", 0.0))
+    ts_tag = _fmt_float_for_name(metadata.get("time_scale", 1.0))
+
+    file_name = (
+        f"braintest_mode-{mode_tag}_seed-{seed_tag}"
+        f"_lesT-{target_lesion_tag}_lesA-{actual_lesion_tag}"
+        f"_a-{a_tag}_b-{b_tag}_Du-{du_tag}_ts-{ts_tag}_{timestamp}.npz"
+    )
+    out_path = output_dir / file_name
+
+    if fft_data:
+        fft_freqs = np.vstack([freqs for freqs, _ in fft_data])
+        fft_magnitudes = np.vstack([mags for _, mags in fft_data])
+        fft_magnitudes_shifted = np.vstack([
+            mags + i * fft_offset for i, (_, mags) in enumerate(fft_data)
+        ])
+    else:
+        fft_freqs = np.empty((0, 0), dtype=float)
+        fft_magnitudes = np.empty((0, 0), dtype=float)
+        fft_magnitudes_shifted = np.empty((0, 0), dtype=float)
+
+    sig_arr = np.asarray(sig_arr, dtype=float)
+    sample_index = np.arange(sig_arr.shape[1], dtype=int) if sig_arr.ndim == 2 else np.array([], dtype=int)
+    roi_positions = np.array([(x, y) for x, y, _ in ROIS], dtype=int)
+    roi_labels = np.array(labels)
+
+    save_payload = {
+        "sample_index": sample_index,
+        "signals": sig_arr,
+        "fc_matrix": np.asarray(FC_matrix, dtype=float),
+        "fft_freqs": fft_freqs,
+        "fft_magnitudes": fft_magnitudes,
+        "fft_magnitudes_shifted": fft_magnitudes_shifted,
+        "fft_vertical_offset": np.array([float(fft_offset)], dtype=float),
+        "roi_labels": roi_labels,
+        "roi_positions_xy": roi_positions,
+        "rois_xyz_label": np.array(ROIS, dtype=object),
+        "metadata": np.array([str(metadata)], dtype=object),
+    }
+
+    if lag_matrix is not None:
+        save_payload["lag_matrix"] = np.asarray(lag_matrix, dtype=float)
+
+    np.savez_compressed(out_path, **save_payload)
+    print(f"Datos graficados guardados en: {out_path}")
+    return out_path
 
 def apply_corpus_callosum_lesion(widget, coords, probability):
     """
@@ -270,11 +342,12 @@ def run_brain_test():
     while not widget._is_initialized:
         app.processEvents()
 
+    actual_lesion_fraction = 0.0
     if lesion_prob > 0.0:
-        apply_corpus_callosum_lesion(widget, CORPUS_CALLOSUM_COORDS, lesion_prob)
+        actual_lesion_fraction = apply_corpus_callosum_lesion(widget, CORPUS_CALLOSUM_COORDS, lesion_prob)
 
     t_warmup = 40.0 * 100 / config.time_scale   # segundos reales de calentamiento
-    t_simulation = 120.0 * 100 / config.time_scale  # segundos reales de simulación tras calentamiento
+    t_simulation = 300 * 100 / config.time_scale  # segundos reales de simulación tras calentamiento
     signals = [[] for _ in range(N_ROIS)]
     measuring = [False]  # lista para poder modificar desde closure
     PULSE_INTERVAL_SIM = 200 * 100 / config.time_scale # Tiempo simulado entre pulsos (unidades del modelo)
@@ -364,6 +437,30 @@ def run_brain_test():
         results['sig_arr'] = sig_arr
         results['FC_matrix'] = FC_matrix
         results['Lag_matrix'] = Lag_matrix
+        results['metadata'] = {
+            'random_seed': RANDOM_SEED,
+            'pulse_mode': PULSE_MODE,
+            'pulse_probability': PULSE_PROBABILITY,
+            'pulse_interval_sim': PULSE_INTERVAL_SIM,
+            'x_pulse': X_PULSE,
+            'y_pulse': Y_PULSE,
+            'zone_size': ZONE_SIZE,
+            'n_rois': N_ROIS,
+            'target_lesion_fraction': TARGET_LESION_FRACTION,
+            'lesion_probability': lesion_prob,
+            'actual_lesion_fraction': actual_lesion_fraction,
+            'a': config.a,
+            'b': config.b,
+            'Du': config.Du,
+            'a_white': config.a_white,
+            'Du_white': config.Du_white,
+            'spot_size': config.spot_size,
+            'time_scale': config.time_scale,
+            't_warmup_s': t_warmup,
+            't_simulation_s': t_simulation,
+            'grid_width': config.grid_width,
+            'grid_height': config.grid_height,
+        }
         app.quit()
 
     timer.timeout.connect(step)
@@ -375,9 +472,9 @@ def run_brain_test():
     QtCore.QTimer.singleShot(t_total_ms, finish)
 
     app.exec()
-    plot_results(results['sig_arr'], results['FC_matrix'])
+    plot_results(results['sig_arr'], results['FC_matrix'], results['metadata'], results['Lag_matrix'])
 
-def plot_results(sig_arr, FC_matrix):
+def plot_results(sig_arr, FC_matrix, metadata=None, lag_matrix=None):
     labels = [r[2] for r in ROIS]
 
     # Figura 1: voltaje en el tiempo con control de visibilidad por ROI
@@ -429,21 +526,42 @@ def plot_results(sig_arr, FC_matrix):
 
     fig_fc.tight_layout()
 
-    # Figura 3: espectro FFT por ROI
+    # Figura 3: espectro FFT por ROI con desfase vertical entre curvas
     fig_fft, ax_fft = plt.subplots(figsize=(12, 6))
-    for i, arr in enumerate(sig_arr):
-        color = cmap(i % cmap.N)
+    fft_data = []
+    max_fft_mag = 0.0
+    for arr in sig_arr:
         centered = arr - np.mean(arr)
         fft_mag = np.abs(np.fft.rfft(centered)) / max(len(centered), 1)
         freqs = np.fft.rfftfreq(len(centered), d=1.0)
-        ax_fft.plot(freqs, fft_mag, color=color, linewidth=1.2, alpha=0.9, label=labels[i])
+        fft_data.append((freqs, fft_mag))
+        if len(fft_mag) > 0:
+            max_fft_mag = max(max_fft_mag, float(np.max(fft_mag)))
+
+    # Separación automática configurable desde constantes globales.
+    fft_offset = max_fft_mag * FFT_VERTICAL_OFFSET_SCALE if max_fft_mag > 0 else FFT_VERTICAL_MIN_OFFSET
+
+    for i, (freqs, fft_mag) in enumerate(fft_data):
+        color = cmap(i % cmap.N)
+        ax_fft.plot(
+            freqs,
+            fft_mag + i * fft_offset,
+            color=color,
+            linewidth=1.2,
+            alpha=0.9,
+            label=labels[i],
+        )
 
     ax_fft.set_xlabel("Frecuencia (ciclos por muestra)")
-    ax_fft.set_ylabel("Magnitud FFT")
-    ax_fft.set_title("Espectro FFT por ROI")
+    ax_fft.set_ylabel("Magnitud FFT + desfase vertical")
+    ax_fft.set_title("Espectro FFT por ROI (curvas desplazadas)")
     ax_fft.grid(True, alpha=0.3)
     ax_fft.legend(loc="upper right", fontsize=8, ncol=2)
     fig_fft.tight_layout()
+
+    if metadata is None:
+        metadata = {}
+    save_plotted_data_npz(sig_arr, FC_matrix, fft_data, fft_offset, labels, metadata, lag_matrix)
 
     plt.show()
 

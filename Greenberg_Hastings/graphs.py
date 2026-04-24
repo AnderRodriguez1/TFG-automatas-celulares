@@ -316,13 +316,13 @@ def plot_individual_data(fit_bool=False, folder_path=None, show_plot=True):
                 print(f"Parámetros de ajuste: {fit_params[0]}")
 
                 # El ajuste log-log con beta sale medio pocho por la variacion, igual con muchas mas muestras se podría mejorar
-                # critical_period = fit_params[0][3]
-                # log_mask = (clean_refr > critical_period - 8) & (clean_refr < critical_period - 3)
-                # log_density = np.log(clean_avg)[log_mask]
-                # log_refr = np.log(critical_period - np.array(clean_refr)[log_mask])
+                critical_period = fit_params[0][3]
+                log_mask = (clean_refr > critical_period - 15) & (clean_refr < critical_period - 1)
+                log_density = np.log(clean_avg)[log_mask]
+                log_refr = np.log(critical_period - np.array(clean_refr)[log_mask])
 
-                # slope = np.polyfit(log_refr, log_density, 1)[0]
-                # print(f"Exponente crítico (beta): {slope:.4f}")
+                slope = np.polyfit(log_refr, log_density, 1)[0]
+                print(f"Exponente crítico (beta): {slope:.4f}")
 
 
                 plt.plot(fit_x, fit_curve, linestyle='--', color='red', linewidth=2, label='Curva ajustada')
@@ -343,15 +343,15 @@ def plot_individual_data(fit_bool=False, folder_path=None, show_plot=True):
     plt.tight_layout()
     plt.show()
 
-    # if critical_period is not None:
-    #     plt.figure(figsize=(11.69, 8.27))
-    #     plt.plot(log_refr, log_density, 'o-', color='green', label='Datos para log-log')
-    #     plt.xlabel('log(Período refractario crítico - Refractario)', fontsize=14)
-    #     plt.ylabel('log(Proporción de células activas)', fontsize=14)
-    #     plt.title('Relación log-log cerca del período refractario crítico', fontsize=18, fontweight='bold')
-    #     plt.grid(True)
-    #     plt.tight_layout()
-    #     plt.show()
+    if critical_period is not None:
+        plt.figure(figsize=(11.69, 8.27))
+        plt.plot(log_refr, log_density, 'o-', color='green', label='Datos para log-log')
+        plt.xlabel('log(Período refractario crítico - Refractario)', fontsize=14)
+        plt.ylabel('log(Proporción de células activas)', fontsize=14)
+        plt.title('Relación log-log cerca del período refractario crítico', fontsize=18, fontweight='bold')
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
 
     return curves_by_density
 
@@ -582,10 +582,10 @@ def plot_data_collapse():
     plt.tight_layout()
     plt.show()
 
-def curve_fit_function(x, a, b, p_c, beta):
+def curve_fit_function(x, a, b, c, p_c, beta):
     # CUANDO SE QUITA C, EL AJUSTE ES BASICAMENTE IGUAL, PREGUNTAR ESO
     base = np.maximum(p_c - x, 0)
-    return a * (x**(-b)) * (base)**beta
+    return a * (x**(-b)) * (base)**beta * np.exp(-x * c)
 
 def fss_function(x, a, b, c):
     return a - b * (x**(-c))
@@ -598,8 +598,8 @@ def main():
     #plot_data_average(fit_bool=True)
     #plot_data_replicate()
     #compare_critical_periods()
-    #plot_individual_data(fit_bool=True)
-    plot_density_dependence()
+    plot_individual_data(fit_bool=True)
+    #plot_density_dependence()
     #plot_data_collapse()
 
 if __name__=="__main__":

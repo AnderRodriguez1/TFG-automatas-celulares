@@ -140,7 +140,7 @@ class VisualTrial(QtWidgets.QMainWindow):
         print("=" * 60)
 
         if success:
-            final_status = "ÉXITO ✓"
+            final_status = "ÉXITO"
         elif w.auto_excited:
             final_status = "AUTO-EXCITACIÓN"
         elif w.system_dead:
