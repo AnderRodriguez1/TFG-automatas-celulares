@@ -346,8 +346,8 @@ def run_brain_test():
     if lesion_prob > 0.0:
         actual_lesion_fraction = apply_corpus_callosum_lesion(widget, CORPUS_CALLOSUM_COORDS, lesion_prob)
 
-    t_warmup = 40.0 * 100 / config.time_scale   # segundos reales de calentamiento
-    t_simulation = 300 * 100 / config.time_scale  # segundos reales de simulación tras calentamiento
+    t_warmup = 60.0 * 100 / config.time_scale   # segundos reales de calentamiento
+    t_simulation = 24000 * 100 / config.time_scale  # segundos reales de simulación tras calentamiento
     signals = [[] for _ in range(N_ROIS)]
     measuring = [False]  # lista para poder modificar desde closure
     PULSE_INTERVAL_SIM = 200 * 100 / config.time_scale # Tiempo simulado entre pulsos (unidades del modelo)
