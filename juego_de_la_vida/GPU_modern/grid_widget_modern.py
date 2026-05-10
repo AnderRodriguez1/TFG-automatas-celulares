@@ -174,8 +174,13 @@ class GridWidget(QOpenGLWidget):
                 except Exception as e:
                     print(f"Error al crear el archivo CSV: {e}")
                     return
+                
+            self.makeCurrent()
+            try:
+                initial_data = self.textures[self.current_texture_idx].read(alignment=1)
+            finally:
+                self.doneCurrent()
 
-            initial_data = self.textures[self.current_texture_idx].read(alignment=1)
             float_array = np.frombuffer(initial_data, dtype=np.float32)
             initial_live_count = int(np.sum(float_array[::4] > 0.5))  # Contar células vivas en el canal R
             self._write_count_to_csv(initial_live_count)

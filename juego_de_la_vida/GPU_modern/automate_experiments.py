@@ -9,12 +9,13 @@ import numpy as np
 from config_modern import Config
 from grid_widget_modern import GridWidget
 
-NUM_STEPS = 5000
+NUM_STEPS = 20_000
 
-DENSITIES = [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+DENSITIES = [0.05, 0.1, 0.3, 0.5, 0.7, 0.9]
 
-BIRTH_RULES = np.arange(0, 9)
-SURVIVE_RULES = np.arange(0, 9)
+BIRTH_RULES = [5]
+SURVIVE_RULES = [4]
+
 
 def run_batch_simulation():
 
@@ -33,13 +34,22 @@ def run_batch_simulation():
     print(f"Guardando archivos en: {save_directory}")
     # Configuracion inicial, solo importa el tamaño del grid y la velocidad, 
     # el resto es irrelevante porque se va a cambiar dentro del bucle
-    config = Config(grid_width=100, grid_height=100, initial_speed=1000,
+    config = Config(grid_width=500, grid_height=500, initial_speed=1000,
                     initial_density=0.3, survive=2, birth=3, save_csv=True)
 
     widget = GridWidget(config=config)
     widget.show()
     widget.hide()  # Ocultar la ventana ya que no es necesaria
     widget.use_buffer_mode = True  # Activar el modo buffer para CSV
+
+    # Esperar a que se inicialice el contexto OpenGL y se realice el render inicial
+    wait_seconds = 5.0
+    waited = 0.0
+    interval = 0.01
+    while not getattr(widget, '_is_initialized', False) and waited < wait_seconds:
+        app.processEvents()
+        time.sleep(interval)
+        waited += interval
 
     total_experiments = len(DENSITIES) * len(BIRTH_RULES) * len(SURVIVE_RULES)
     # Barra de progreso, queda muy bien

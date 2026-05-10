@@ -63,7 +63,9 @@ TARGET_LESION_FRACTION = 0.7  # área deseada (0.0-1.0). Si es 0.0 no se lesiona
 
 
 def _fmt_float_for_name(value, ndigits=3):
-    """Formatea flotantes para nombres de archivo seguros y legibles."""
+    """
+    Formatea flotantes para nombres de archivo
+    """
     txt = f"{float(value):.{ndigits}f}".rstrip("0").rstrip(".")
     if txt in {"", "-0"}:
         txt = "0"
@@ -71,7 +73,9 @@ def _fmt_float_for_name(value, ndigits=3):
 
 
 def save_plotted_data_npz(sig_arr, FC_matrix, fft_data, fft_offset, labels, metadata, lag_matrix=None):
-    """Guarda en NPZ todos los datos usados para las gráficas."""
+    """
+    Guarda en NPZ todos los datos usados para las gráficas.
+    """
     output_dir = Path(__file__).parent / "NPZs_brain_test"
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -199,7 +203,7 @@ def find_lesion_probability(config, coords, target_fraction, tol=0.01, max_iter=
     """
     Usa bisección para encontrar la probabilidad de centros que produce
     una cobertura de `target_fraction` (0-1) sobre el polígono del cuerpo calloso.
-    Devuelve la probabilidad encontrada e imprime el resultado.
+    Devuelve la probabilidad encontrada e imprime el resultado. No es exacto
     """
     from matplotlib.path import Path as MplPath
 
@@ -342,12 +346,12 @@ def run_brain_test():
     while not widget._is_initialized:
         app.processEvents()
 
-    actual_lesion_fraction = 0.0
+    actual_lesion_fraction = 0.7
     if lesion_prob > 0.0:
         actual_lesion_fraction = apply_corpus_callosum_lesion(widget, CORPUS_CALLOSUM_COORDS, lesion_prob)
 
     t_warmup = 60.0 * 100 / config.time_scale   # segundos reales de calentamiento
-    t_simulation = 24000 * 100 / config.time_scale  # segundos reales de simulación tras calentamiento
+    t_simulation = 300 * 100 / config.time_scale  # segundos reales de simulación tras calentamiento
     signals = [[] for _ in range(N_ROIS)]
     measuring = [False]  # lista para poder modificar desde closure
     PULSE_INTERVAL_SIM = 200 * 100 / config.time_scale # Tiempo simulado entre pulsos (unidades del modelo)
@@ -420,19 +424,6 @@ def run_brain_test():
                     FC_matrix[i, j] = xcorr[max_idx]
                     Lag_matrix[i, j] = lags[max_idx]
 
-        # s1 = np.array(zone_1) - np.mean(zone_1)
-        # s2 = np.array(zone_2) - np.mean(zone_2)
-        # xcorr = correlate(s1, s2, mode='full')
-        # norm = np.std(zone_1) * np.std(zone_2) * len(zone_1)
-        # if norm > 0:
-        #     xcorr /= norm
-        # lags = np.arange(-len(s1) + 1, len(s1))
-        # max_idx = np.argmax(xcorr)
-        # best_lag = lags[max_idx]
-        # r_max = xcorr[max_idx]
-
-        # print(f"Muestras recogidas: {len(zone_1)}")
-        # print(f"Max cross-correlation: {r_max:.4f} (lag = {best_lag} muestras)")
 
         results['sig_arr'] = sig_arr
         results['FC_matrix'] = FC_matrix
@@ -472,65 +463,11 @@ def run_brain_test():
     QtCore.QTimer.singleShot(t_total_ms, finish)
 
     app.exec()
-    plot_results(results['sig_arr'], results['FC_matrix'], results['metadata'], results['Lag_matrix'])
 
-def plot_results(sig_arr, FC_matrix, metadata=None, lag_matrix=None):
-    labels = [r[2] for r in ROIS]
-
-    # Figura 1: voltaje en el tiempo con control de visibilidad por ROI
-    fig_voltage, ax_voltage = plt.subplots(figsize=(12, 6))
-
-    cmap = plt.get_cmap("tab20")
-    lines = []
-    for i, arr in enumerate(sig_arr):
-        color = cmap(i % cmap.N)
-        line, = ax_voltage.plot(arr, color=color, alpha=0.9, linewidth=1.3, label=labels[i])
-        lines.append(line)
-    ax_voltage.set_xlabel("Muestra")
-    ax_voltage.set_ylabel("Voltaje (u)")
-    ax_voltage.set_title("Ondas propagandose por ROI")
-    ax_voltage.legend(loc="upper right", fontsize=8, ncol=2)
-    ax_voltage.grid(True, alpha=0.3)
-
-    # Menu interactivo para activar/desactivar curvas individuales
-    fig_voltage.subplots_adjust(right=0.82)
-    check_ax = fig_voltage.add_axes([0.84, 0.12, 0.14, 0.76])
-    check_ax.set_title("ROIs", fontsize=9)
-    check = CheckButtons(check_ax, labels, [True] * len(lines))
-
-    for txt in check.labels:
-        txt.set_fontsize(8)
-
-    def toggle_curve(label):
-        idx = labels.index(label)
-        line = lines[idx]
-        line.set_visible(not line.get_visible())
-        fig_voltage.canvas.draw_idle()
-
-    check.on_clicked(toggle_curve)
-
-    # Figura 2: matriz de conectividad funcional
-    fig_fc, ax_fc = plt.subplots(figsize=(8, 7))
-    cax = ax_fc.imshow(FC_matrix, cmap='viridis', vmin=0, vmax=1)
-    ax_fc.set_xticks(np.arange(N_ROIS))
-    ax_fc.set_yticks(np.arange(N_ROIS))
-    ax_fc.set_xticklabels(labels, rotation=45, ha="right")
-    ax_fc.set_yticklabels(labels)
-    ax_fc.set_title("Matriz de Conectividad Funcional (FC)")
-    fig_fc.colorbar(cax, ax=ax_fc, fraction=0.046, pad=0.04)
-
-    for i in range(N_ROIS):
-        for j in range(N_ROIS):
-            ax_fc.text(j, i, f"{FC_matrix[i, j]:.2f}", 
-                       ha="center", va="center", color="white" if FC_matrix[i,j] < 0.8 else "black", fontsize=8)
-
-    fig_fc.tight_layout()
-
-    # Figura 3: espectro FFT por ROI con desfase vertical entre curvas
-    fig_fft, ax_fft = plt.subplots(figsize=(12, 6))
     fft_data = []
     max_fft_mag = 0.0
-    for arr in sig_arr:
+
+    for arr in results['sig_arr']:
         centered = arr - np.mean(arr)
         fft_mag = np.abs(np.fft.rfft(centered)) / max(len(centered), 1)
         freqs = np.fft.rfftfreq(len(centered), d=1.0)
@@ -538,32 +475,11 @@ def plot_results(sig_arr, FC_matrix, metadata=None, lag_matrix=None):
         if len(fft_mag) > 0:
             max_fft_mag = max(max_fft_mag, float(np.max(fft_mag)))
 
-    # Separación automática configurable desde constantes globales.
     fft_offset = max_fft_mag * FFT_VERTICAL_OFFSET_SCALE if max_fft_mag > 0 else FFT_VERTICAL_MIN_OFFSET
-
-    for i, (freqs, fft_mag) in enumerate(fft_data):
-        color = cmap(i % cmap.N)
-        ax_fft.plot(
-            freqs,
-            fft_mag + i * fft_offset,
-            color=color,
-            linewidth=1.2,
-            alpha=0.9,
-            label=labels[i],
-        )
-
-    ax_fft.set_xlabel("Frecuencia (ciclos por muestra)")
-    ax_fft.set_ylabel("Magnitud FFT + desfase vertical")
-    ax_fft.set_title("Espectro FFT por ROI (curvas desplazadas)")
-    ax_fft.grid(True, alpha=0.3)
-    ax_fft.legend(loc="upper right", fontsize=8, ncol=2)
-    fig_fft.tight_layout()
-
-    if metadata is None:
-        metadata = {}
-    save_plotted_data_npz(sig_arr, FC_matrix, fft_data, fft_offset, labels, metadata, lag_matrix)
-
-    plt.show()
+    save_plotted_data_npz(sig_arr=results['sig_arr'], FC_matrix=results['FC_matrix'], 
+                          fft_data=fft_data, fft_offset=fft_offset, labels=[r[2] for r in ROIS], 
+                          metadata=results["metadata"], lag_matrix=results['Lag_matrix'])
+    
 
 if __name__ == "__main__":
     run_brain_test()

@@ -81,9 +81,9 @@ def plot_data_average():
                     break
 
     ax2.plot(critical_periods.values(), marker='o', linestyle='-', color='purple')
-    fig.suptitle('Proporción promedio de células activas en función del período refractario', fontsize=14, fontweight='bold')
-    ax1.set_xlabel('Período refractario')
-    ax1.set_ylabel('Proporción promedio de células activas (últimos 100 pasos)')
+    fig.suptitle('Proporción promedio de células activas en función del período refractario', fontsize=18, fontweight='bold')
+    ax1.set_xlabel('Período refractario', fontsize=14)
+    ax1.set_ylabel('Proporción promedio de células activas (últimos 100 pasos)', fontsize=14)
     ax1.grid(True)
     ax1.legend(title='Tamaños de grid')
     plt.show()
@@ -306,9 +306,9 @@ def plot_individual_data(fit_bool=False, folder_path=None, show_plot=True):
                 clean_refr = np.array(clean_refr)
                 clean_avg = np.array(clean_avg)
                 p_c_guess = clean_refr[-1] + 1  # Just past the last nonzero point
-                p_0 = [0.5, 0.5, 0.01, p_c_guess, 0.5]
-                bounds_lower = [0.0001, 0.0001, 0.0, clean_refr[-1], 0.0001]
-                bounds_upper = [10, 5, 1, 250, 5]
+                p_0 = [0.5, 0.5, p_c_guess, 0.5]
+                bounds_lower = [0.0001, 0.0001, clean_refr[-1], 0.0001]
+                bounds_upper = [10, 5, 250, 5]
                 fit_params = curve_fit(curve_fit_function, clean_refr, clean_avg,
                                         p0=p_0, bounds=(bounds_lower, bounds_upper), maxfev=100000)
                 fit_x = np.linspace(min(sorted_refr), max(sorted_refr), 200)
@@ -316,7 +316,7 @@ def plot_individual_data(fit_bool=False, folder_path=None, show_plot=True):
                 print(f"Parámetros de ajuste: {fit_params[0]}")
 
                 # El ajuste log-log con beta sale medio pocho por la variacion, igual con muchas mas muestras se podría mejorar
-                critical_period = fit_params[0][3]
+                critical_period = fit_params[0][2]
                 log_mask = (clean_refr > critical_period - 15) & (clean_refr < critical_period - 1)
                 log_density = np.log(clean_avg)[log_mask]
                 log_refr = np.log(critical_period - np.array(clean_refr)[log_mask])
@@ -332,12 +332,12 @@ def plot_individual_data(fit_bool=False, folder_path=None, show_plot=True):
             print(f"Error al ajustar la curva: {e}")
 
     plt.title(
-        f'Proporción promedio de células activas (densidad={density_to_plot:.4g})',
+        f'Proporción promedio de células activas ($\\rho={density_to_plot:.4g}$)',
         fontsize=18,
         fontweight='bold'
     )
-    plt.xlabel('Período refractario', fontsize=14)
-    plt.ylabel('Proporción promedio de células activas (últimos 100 pasos)', fontsize=14)
+    plt.xlabel('Periodo refractario', fontsize=16)
+    plt.ylabel('Proporción promedio de células activas (últimos 100 pasos)', fontsize=16)
     plt.grid(True)
     plt.legend(fontsize=12)
     plt.tight_layout()
@@ -346,8 +346,8 @@ def plot_individual_data(fit_bool=False, folder_path=None, show_plot=True):
     if critical_period is not None:
         plt.figure(figsize=(11.69, 8.27))
         plt.plot(log_refr, log_density, 'o-', color='green', label='Datos para log-log')
-        plt.xlabel('log(Período refractario crítico - Refractario)', fontsize=14)
-        plt.ylabel('log(Proporción de células activas)', fontsize=14)
+        plt.xlabel('log(Periodo refractario crítico - Refractario)', fontsize=16)
+        plt.ylabel('log(Proporción de células activas)', fontsize=16)
         plt.title('Relación log-log cerca del período refractario crítico', fontsize=18, fontweight='bold')
         plt.grid(True)
         plt.tight_layout()
@@ -397,9 +397,9 @@ def plot_data_replicate():
         plt.plot(steps, inactive_proportion, label='Células inactivas', color='green')
         plt.plot(steps, shannon_entropy, label='Entropía de Shannon', color='red', linestyle='--')
         plt.legend()
-        plt.title('Proporción de estados celulares a lo largo del tiempo', fontsize=14, fontweight='bold')
-        plt.xlabel('Paso de tiempo')
-        plt.ylabel('Proporción de células')
+        plt.title('Proporción de estados celulares a lo largo del tiempo', fontsize=18, fontweight='bold')
+        plt.xlabel('Paso de tiempo', fontsize=14)
+        plt.ylabel('Proporción de células', fontsize=14)
         print(f"refractory_proportion[-1]: {refractory_proportion[-1]}")
         print(f"inactive_proportion[-1]: {inactive_proportion[-1]}")
         print(f"active_proportion[-1]: {active_proportion[-1]}")
@@ -502,21 +502,14 @@ def plot_density_dependence():
     plt.show()
 
 def plot_data_collapse():
-    """
-    Función para graficar el colapso de datos usando los parámetros reales (A y tau)
-    ajustados individualmente para cada densidad.
-    Eje X: 1 - R / R_c
-    Eje Y: (rho * R^tau) / (A * R_c^beta)
-    """
     root_folder = QtWidgets.QFileDialog.getExistingDirectory(
         None,
         "Seleccionar carpeta raíz con subcarpetas CSVs_GH_densidad_XX\n(Para el colapso de datos)"
     )
-
     if not root_folder:
         return
 
-    relevant_folders =[]
+    relevant_folders = []
     for item in os.listdir(root_folder):
         full_path = os.path.join(root_folder, item)
         density_folder_match = re.fullmatch(r'CSVs_GH_densidad_(\d+(?:\.\d+)?)', item)
@@ -535,67 +528,76 @@ def plot_data_collapse():
             continue
 
         periods = np.array(curves_by_density[density]['refractory'])
-        means = np.array(curves_by_density[density]['mean'])
-        
-        # Filtrar régimen activo
+        means   = np.array(curves_by_density[density]['mean'])
+
         mask = means > 0
         if not np.any(mask):
             continue
-            
+
         clean_refr = periods[mask]
-        clean_avg = means[mask]
-        
-        # 1. Ajustar la curva para ESTA densidad y sacar sus parámetros reales
+        clean_avg  = means[mask]
+
         try:
-            p_c_guess = clean_refr[-1] + 1.0  
-            p_0 =[0.5, 0.5, p_c_guess, 0.5]
-            bounds_lower =[0.001, 0.001, clean_refr[-1], 0.001]
-            bounds_upper =[10.0, 5.0, 250.0, 5.0]
-            
-            fit_params, _ = curve_fit(curve_fit_function, clean_refr, clean_avg,
-                                      p0=p_0, bounds=(bounds_lower, bounds_upper), maxfev=100000)
-            
-            A_opt = fit_params[0]
-            tau_opt = fit_params[1]
-            #c_opt = fit_params[2]
-            Rc_opt = fit_params[2]
-            beta_opt = fit_params[3]  # ¡Extraemos el exponente crítico de la transición!
-            
-            # 2. TRANSFORMACIÓN DE COLAPSO EXACTA Y NORMALIZADA
-            X = 1 - clean_refr / Rc_opt
-            
-            # El Eje Y aísla puramente la función (1 - R/Rc)^beta
+            p_c_guess = clean_refr[-1] + 1.0
+            p_0           = [0.5, 0.5, p_c_guess, 0.5]
+            bounds_lower  = [0.001, 0.001, clean_refr[-1], 0.001]
+            bounds_upper  = [10.0,  5.0,   250.0,          5.0]
+
+            fit_params, _ = curve_fit(
+                curve_fit_function, clean_refr, clean_avg,
+                p0=p_0, bounds=(bounds_lower, bounds_upper), maxfev=100000
+            )
+
+            A_opt    = fit_params[0]
+            tau_opt  = fit_params[1]
+            Rc_opt   = fit_params[2]
+            beta_opt = fit_params[3]
+
+            # eje X: va de ~1 (R≈0) hasta 0 (R→Rc)
+            X = 1.0 - clean_refr / Rc_opt
+
+            # eje Y: (1 - R/Rc)^beta — vale 1 en X=1 y 0 en X=0
             Y = (clean_avg * (clean_refr ** tau_opt)) / (A_opt * (Rc_opt ** beta_opt))
-            
-            plt.plot(X, Y, marker='o', linestyle='-', alpha=0.8, 
-                     label=f'Densidad {density:.2f} ($\\tau$={tau_opt:.2f}, $R_c$={Rc_opt:.1f}, $\\beta$={beta_opt:.2f}, A={A_opt:.2f})')
-                     
+
+            # Ordenar por X para que la línea se dibuje de izquierda a derecha
+            order = np.argsort(X)
+            X, Y  = X[order], Y[order]
+
+            plt.plot(X, Y, marker='o', linestyle='-', alpha=0.8,
+                     label=f'Densidad {density:.2f} ('f'$R_c$={Rc_opt:.1f}, $\\beta$={beta_opt:.2f})')
+
         except Exception as e:
             print(f"Fallo al ajustar la densidad {density}: {e}")
             continue
 
     plt.title('Colapso de Datos', fontsize=18, fontweight='bold')
-    plt.xlabel('$1 - R / R_c$ (Periodo Refractario Normalizado)', fontsize=14)
-    plt.ylabel('$\\rho \\cdot R^{\\tau} / A \\cdot R_c^{\\beta}$ (Amplitud Reescalada)', fontsize=14)
+    plt.xlabel('Período Refractario Normalizado ($1 - R/R_c$)', fontsize=14)
+    plt.ylabel('$\\rho \\cdot R^{\\tau}\\,/\\,(A \\cdot R_c^{\\beta})$ (Amplitud Reescalada)', fontsize=14)
+
+    # ── CORRECCIONES CLAVE ──────────────────────────────────────────────────
+    plt.xlim(1, 0)          # X decrece hacia la derecha: termina en 0 (R → Rc)
+    plt.ylim(0, 1.05)       # Y ∈ [0, 1] teóricamente
+    # ────────────────────────────────────────────────────────────────────────
+
     plt.grid(True)
     plt.legend(fontsize=10)
     plt.tight_layout()
     plt.show()
 
-def curve_fit_function(x, a, b, c, p_c, beta):
+def curve_fit_function(x, a, b, p_c, beta):
     # CUANDO SE QUITA C, EL AJUSTE ES BASICAMENTE IGUAL, PREGUNTAR ESO
     base = np.maximum(p_c - x, 0)
-    return a * (x**(-b)) * (base)**beta * np.exp(-x * c)
+    return a * (x**(-b)) * (base)**beta
 
 def fss_function(x, a, b, c):
     return a - b * (x**(-c))
 
-def density_fit_function(x, a, b, c):
-    return a * x**(-b) + c
+def density_fit_function(x, a, c):
+    return a * x**(-0.5) + c
 
 def main():
     app = QtWidgets.QApplication([])
-    #plot_data_average(fit_bool=True)
+    #plot_data_average()
     #plot_data_replicate()
     #compare_critical_periods()
     plot_individual_data(fit_bool=True)

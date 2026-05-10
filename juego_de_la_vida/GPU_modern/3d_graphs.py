@@ -72,10 +72,10 @@ def generate_3d_plot():
 
     surf = ax.plot_surface(X, Y, Z, cmap='viridis')
 
-    ax.set_xlabel('Regla de nacimiento')
-    ax.set_ylabel('Regla de supervivencia')
-    ax.set_zlabel('Entropía de Shannon')
-    ax.set_title(f'Entropía de Shannon para la densidad inicial $\\rho = {density_value}$')
+    ax.set_xlabel('Regla de nacimiento', fontsize=14)
+    ax.set_ylabel('Regla de supervivencia', fontsize=14)
+    ax.set_zlabel('Entropía de Shannon', fontsize=14)
+    ax.set_title(f'Entropía de Shannon para la densidad inicial $\\rho = {density_value}$', fontsize=16, fontweight='bold')
 
     fig.colorbar(surf, shrink=0.5, aspect=10)
 
@@ -103,5 +103,7 @@ def calculate_shannon_entropy(live_cells, total_cells):
     return shannon_entropy
 
 if __name__ == "__main__":
+
+    
 
     generate_3d_plot()

@@ -129,10 +129,10 @@ def plot_combined_analysis():
     x_fit = np.linspace(0, x_max, 500)
 
     # 1. Ajuste de Éxito Estricto (Híbrido)
-    p0_hybrid =[0.002, 150, 0.19]
-    bounds_hybrid = ([1e-5, 50, 0.15],[0.05, 1000, 0.25])
+    p0_hybrid =[0.002, 150, 0.05]
+    bounds_hybrid = ([1e-5, 50, 1e-4],[0.05, 1000000, 0.25])
     try:
-        popt_hybrid, _ = curve_fit(hybrid_fit, x_data, y_strict, p0=p0_hybrid, bounds=bounds_hybrid)
+        popt_hybrid, _ = curve_fit(hybrid_fit, x_data*np.sqrt(0.02), y_strict, p0=p0_hybrid, bounds=bounds_hybrid)
         fit_strict = hybrid_fit(x_fit, *popt_hybrid)
     except:
         fit_strict = None
@@ -141,39 +141,41 @@ def plot_combined_analysis():
     p0_kramers = [0.002]
     bounds_kramers = ([1e-5],[0.05])
     try:
-        popt_kramers, _ = curve_fit(kramers_fit, x_data, y_ignit, p0=p0_kramers, bounds=bounds_kramers)
+        popt_kramers, _ = curve_fit(kramers_fit, x_data*np.sqrt(0.02), y_ignit, p0=p0_kramers, bounds=bounds_kramers)
         fit_ignit = kramers_fit(x_fit, *popt_kramers)
     except:
         fit_ignit = None
 
     # --- FIGURA 1: AISLAMIENTO DE KRAMERS ---
     plt.figure(figsize=(9, 6))
-    plt.errorbar(x_data, y_ignit, yerr=df['ignition_std'], fmt='s', color='forestgreen', alpha=0.7,
+    plt.errorbar(x_data*np.sqrt(0.02), y_ignit, yerr=df['ignition_std'], fmt='s', color='forestgreen', alpha=0.7,
                  capsize=4, label='Datos (Ignorando Autoexcitación)')
     
     if fit_ignit is not None:
         plt.plot(x_fit, fit_ignit, '--', color='forestgreen', linewidth=2.5, 
                  label=r'Ajuste Arrhenius-Kramers')
 
-    plt.title('Estudio de Ablación: Aislamiento de la Ignición Estocástica')
-    plt.xlabel(r'Amplitud del Ruido ($\sigma$)')
-    plt.ylabel('Probabilidad de Éxito')
+    plt.title('Aislamiento de la componente de disparo', fontsize=24, fontweight="bold")
+    plt.xlabel(r'Amplitud del Ruido escalada ($\sigma \cdot \sqrt{\Delta t}$)', fontsize=18)
+    plt.xlim(0, 0.035)
+    plt.ylabel('Probabilidad de Éxito', fontsize=18)
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
 
     # --- FIGURA 2: AJUSTE HÍBRIDO COMPLETO ---
     plt.figure(figsize=(9, 6))
-    plt.errorbar(x_data, y_strict, yerr=df['strict_std'], fmt='o', color='tab:blue',
+    plt.errorbar(x_data*np.sqrt(0.02), y_strict, yerr=df['strict_std'], fmt='o', color='tab:blue',
                  capsize=4, label='Datos')
     
     if fit_strict is not None:
         plt.plot(x_fit, fit_strict, '-', color='darkorange', linewidth=2.5, 
                  label=r'Ajuste')
 
-    plt.title('Resonancia Estocástica Espacial y Transición de Fase')
-    plt.xlabel(r'Amplitud del Ruido ($\sigma$)')
-    plt.ylabel('Probabilidad de Éxito')
+    plt.title('Resonancia Estocástica', fontsize=24, fontweight="bold")
+    plt.xlabel(r'Amplitud del Ruido escalada ($\sigma \cdot \sqrt{\Delta t}$)', fontsize=18)
+    plt.xlim(0, 0.035)
+    plt.ylabel('Probabilidad de Éxito', fontsize=18)
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
@@ -183,12 +185,12 @@ def plot_combined_analysis():
 
     print("--- PARÁMETROS DEL AJUSTE AISLADO (KRAMERS) ---")
     if fit_ignit is not None:
-        print(f"Barrera Ignición (alpha): {popt_kramers[0]:.6f}\n")
+        print(f"Barrera Ignición (alpha): {popt_kramers[0]:.10f}\n")
     
     print("--- PARÁMETROS DEL AJUSTE HÍBRIDO ---")
     if fit_strict is not None:
-        print(f"Barrera Ignición (alpha): {popt_hybrid[0]:.6f}")
-        print(f"Umbral Turbulencia (sigma_c): {popt_hybrid[2]:.4f} (Pendiente: {popt_hybrid[1]:.1f})")
+        print(f"Barrera Ignición (alpha): {popt_hybrid[0]:.10f}")
+        print(f"Umbral Turbulencia (sigma_c): {popt_hybrid[2]:.10f} (Pendiente: {popt_hybrid[1]:.10f})")
 
 if __name__ == "__main__":
     plot_combined_analysis()
