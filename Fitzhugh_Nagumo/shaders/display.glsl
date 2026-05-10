@@ -109,7 +109,7 @@ void main()
         }
     }
 
-    // Overlay de ROIs de voltaje (relleno tenue + borde intenso)
+    // Overlay de ROIs de voltaje 
     if (u_show_voltage_rois) {
         float roi_here = texture(u_voltage_roi_mask, sample_coord).r;
         if (roi_here > 0.5) {

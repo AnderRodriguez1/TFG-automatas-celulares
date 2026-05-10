@@ -79,8 +79,8 @@ def plot_brain_curves():
     axes[2].set_title("Producto R2 * L1", fontsize=14, fontweight="bold")
     # Si L1 dispara una vez por cada 3 pulsos de R2, confirma la hipótesis
 
-    peaks_R2, _ = find_peaks(signals[1], height=0.8)  # Ajusta el umbral según sea necesario
-    peaks_L1, _ = find_peaks(signals[8], height=0.5)  # Ajusta el umbral según sea necesario
+    peaks_R2, _ = find_peaks(signals[1], height=0.8)  
+    peaks_L1, _ = find_peaks(signals[8], height=0.5)  
     print(f"Numero de picos en R2: {len(peaks_R2)}")
     print(f"Numero de picos en L1: {len(peaks_L1)}")
     print(f"Cociente de picos R2/L1: {len(peaks_R2)/len(peaks_L1) if len(peaks_L1) > 0 else 'Inf'}")

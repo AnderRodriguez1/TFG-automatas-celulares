@@ -50,7 +50,7 @@ def run_batch_simulation():
         app.processEvents()
         time.sleep(0.1)
         app.processEvents()
-        widget.hide()  # Ocultar la ventana ya que no es necesaria
+        widget.hide()  # Ocultar la ventana 
 
         for refractory_period in REFRACTORY_PERIODS:
                     
@@ -113,7 +113,7 @@ def run_single_size_simulation():
         app.processEvents()
         time.sleep(0.1)
         app.processEvents()
-        widget.hide()  # Ocultar la ventana ya que no es necesaria
+        widget.hide()  # Ocultar la ventana 
 
         for refractory_period in REFRACTORY_PERIODS:
                     

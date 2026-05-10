@@ -52,13 +52,13 @@ def load_csv_data():
             if np.isnan(sigma_value) or total_runs == 0:
                 continue
 
-            # 1. Leer columna 'success'
+            # Leer columna 'success'
             if 'success' in df.columns:
                 strict_bool = df['success'].astype(str).str.strip().str.lower().isin(['true', '1', 't', 'yes'])
             else:
                 strict_bool = pd.Series([False] * total_runs)
 
-            # 2. Leer columna 'auto_excited'
+            # Leer columna 'auto_excited'
             if 'auto_excited' in df.columns:
                 auto_bool = df['auto_excited'].astype(str).str.strip().str.lower().isin(['true', '1', 't', 'yes'])
             else:
@@ -101,8 +101,6 @@ def load_csv_data():
     return df_out.sort_values(by='sigma').reset_index(drop=True)
 
 
-# --- FUNCIONES MATEMÁTICAS ---
-
 def hybrid_fit(x, alpha, k, sigma_c):
     """ Ajuste completo: Kramers (Ignición) * Sigmoide (Corte por turbulencia) """
     x_safe = np.maximum(np.asarray(x, dtype=float), 1e-8)
@@ -128,7 +126,7 @@ def plot_combined_analysis():
     x_min, x_max = np.min(x_data), np.max(x_data)
     x_fit = np.linspace(0, x_max, 500)
 
-    # 1. Ajuste de Éxito Estricto (Híbrido)
+    # Ajuste total
     p0_hybrid =[0.002, 150, 0.05]
     bounds_hybrid = ([1e-5, 50, 1e-4],[0.05, 1000000, 0.25])
     try:
@@ -137,7 +135,7 @@ def plot_combined_analysis():
     except:
         fit_strict = None
 
-    # 2. Ajuste de Ignición Total (Solo Kramers de 1 parámetro)
+    # Ajuste de Ignición Total (Solo Kramers de 1 parámetro)
     p0_kramers = [0.002]
     bounds_kramers = ([1e-5],[0.05])
     try:
@@ -146,7 +144,7 @@ def plot_combined_analysis():
     except:
         fit_ignit = None
 
-    # --- FIGURA 1: AISLAMIENTO DE KRAMERS ---
+    # Solo kramers
     plt.figure(figsize=(9, 6))
     plt.errorbar(x_data*np.sqrt(0.02), y_ignit, yerr=df['ignition_std'], fmt='s', color='forestgreen', alpha=0.7,
                  capsize=4, label='Datos (Ignorando Autoexcitación)')
@@ -163,7 +161,7 @@ def plot_combined_analysis():
     plt.legend()
     plt.tight_layout()
 
-    # --- FIGURA 2: AJUSTE HÍBRIDO COMPLETO ---
+    # Ajuste completo
     plt.figure(figsize=(9, 6))
     plt.errorbar(x_data*np.sqrt(0.02), y_strict, yerr=df['strict_std'], fmt='o', color='tab:blue',
                  capsize=4, label='Datos')
@@ -180,14 +178,14 @@ def plot_combined_analysis():
     plt.legend()
     plt.tight_layout()
 
-    # --- MOSTRAR GRÁFICAS Y PARÁMETROS ---
-    plt.show()  # Esto abrirá ambas ventanas a la vez
+    
+    plt.show()  
 
-    print("--- PARÁMETROS DEL AJUSTE AISLADO (KRAMERS) ---")
+    print("PARÁMETROS DEL AJUSTE AISLADO (KRAMERS)")
     if fit_ignit is not None:
         print(f"Barrera Ignición (alpha): {popt_kramers[0]:.10f}\n")
     
-    print("--- PARÁMETROS DEL AJUSTE HÍBRIDO ---")
+    print("PARÁMETROS DEL AJUSTE GENERAL")
     if fit_strict is not None:
         print(f"Barrera Ignición (alpha): {popt_hybrid[0]:.10f}")
         print(f"Umbral Turbulencia (sigma_c): {popt_hybrid[2]:.10f} (Pendiente: {popt_hybrid[1]:.10f})")

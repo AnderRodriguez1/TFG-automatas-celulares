@@ -574,10 +574,10 @@ def plot_data_collapse():
     plt.xlabel('Período Refractario Normalizado ($1 - R/R_c$)', fontsize=14)
     plt.ylabel('$\\rho \\cdot R^{\\tau}\\,/\\,(A \\cdot R_c^{\\beta})$ (Amplitud Reescalada)', fontsize=14)
 
-    # ── CORRECCIONES CLAVE ──────────────────────────────────────────────────
-    plt.xlim(1, 0)          # X decrece hacia la derecha: termina en 0 (R → Rc)
-    plt.ylim(0, 1.05)       # Y ∈ [0, 1] teóricamente
-    # ────────────────────────────────────────────────────────────────────────
+    
+    plt.xlim(1, 0)          # X decrece hacia la derecha
+    plt.ylim(0, 1.05)       # Y entre 0 y 1
+    
 
     plt.grid(True)
     plt.legend(fontsize=10)
@@ -585,7 +585,6 @@ def plot_data_collapse():
     plt.show()
 
 def curve_fit_function(x, a, b, p_c, beta):
-    # CUANDO SE QUITA C, EL AJUSTE ES BASICAMENTE IGUAL, PREGUNTAR ESO
     base = np.maximum(p_c - x, 0)
     return a * (x**(-b)) * (base)**beta
 

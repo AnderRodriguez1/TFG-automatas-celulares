@@ -1,4 +1,4 @@
-// Shader para bloquear o desbloquear una celda en el grid
+// Shader para quitar la difusión en una región específica del grid
 
 #version 330 core
 
