@@ -5,7 +5,7 @@ from scipy.signal import find_peaks
 
 MODEL_DIR = Path(__file__).parent
 NPZ_DIR = MODEL_DIR / "NPZs_brain_test"
-BRAIN_TEST_NPZ = NPZ_DIR / "braintest_mode-periodic_seed-46_lesT-0p7_lesA-0p778_a-0p05_b-0p24_Du-0p75_ts-100_20260425_034104.npz"
+BRAIN_TEST_NPZ = NPZ_DIR / "braintest_mode-periodic_seed-46_lesT-0_lesA-0_a-0p05_b-0p24_Du-0p75_ts-100_20260502_193839.npz"
 
 
 def plot_brain_curves():
@@ -33,11 +33,13 @@ def plot_brain_curves():
         roi_label = roi_labels[i]
         plt.plot(fft_freqs_low_freq[i], fft_magnitudes_low_freq[i], label=roi_label)
     
-    plt.xlabel("Frecuencia (Ciclos por muestra)", fontsize=14)
+    plt.xlabel("Frecuencia (Ciclos por muestra)", fontsize=26)
     plt.xlim(0, 0.012)
-    plt.ylabel("Intensidad", fontsize=14)
-    plt.title("FFT de las señales de las regiones cerebrales", fontsize=26, fontweight="bold")
-    plt.legend(loc="upper right")
+    plt.ylabel("Intensidad", fontsize=26)
+    plt.tick_params(axis='both', labelsize=22)
+    plt.title("FFT de las señales de las regiones cerebrales", fontsize=28, fontweight="bold")
+    plt.legend(loc="upper right", fontsize=18)
+    plt.grid(True, alpha=0.3)
     plt.tight_layout()
 
     plt.figure(figsize=(12, 8))
@@ -45,11 +47,14 @@ def plot_brain_curves():
         roi_label = roi_labels[i]
         plt.plot(fft_freqs_low_freq[i], fft_magnitudes_shifted_low_freq[i], label=roi_label)
 
-    plt.xlabel("Frecuencia (Ciclos por muestra)", fontsize=18)
+    plt.xlabel("Frecuencia (Ciclos por muestra)", fontsize=26)
     plt.xlim(0, 0.012)
-    plt.ylabel("Intensidad", fontsize=18)
-    plt.title("FFT de las señales de las regiones cerebrales (desplazadas)", fontsize=26, fontweight="bold")
-    plt.legend(loc="upper right")
+    plt.ylabel("Intensidad", fontsize=26)
+    plt.tick_params(axis='both', labelsize=22)
+    plt.title("FFT de las señales de las regiones cerebrales (desplazadas)", fontsize=28, fontweight="bold")
+    handles, labels = plt.gca().get_legend_handles_labels()
+    plt.legend(handles[::-1], labels[::-1], loc="upper right", fontsize=18)
+    plt.grid(True, alpha=0.3)
     plt.tight_layout()
 
     # Matriz de correlacion
@@ -61,13 +66,15 @@ def plot_brain_curves():
     for i in range(correlation_matrix.shape[0]):
         for j in range(correlation_matrix.shape[1]):
             plt.text(j, i, f"{correlation_matrix[i, j]:.2f}", ha="center", va="center", color="white" if correlation_matrix[i, j] < 0.8 else "black", fontsize=10)
-    plt.xticks(ticks=np.arange(len(roi_labels)), labels=roi_labels, fontsize=14)
-    plt.yticks(ticks=np.arange(len(roi_labels)), labels=roi_labels, fontsize=14)
-    plt.colorbar(label="Correlación")
-    plt.title("Matriz de Correlación", fontsize=26, fontweight="bold")
+    plt.xticks(ticks=np.arange(len(roi_labels)), labels=roi_labels, fontsize=19)
+    plt.yticks(ticks=np.arange(len(roi_labels)), labels=roi_labels, fontsize=19)
+    cbar = plt.colorbar()
+    cbar.set_label("Correlación", fontsize=22)
+    cbar.ax.tick_params(labelsize=14)
+    plt.title("Matriz de Correlación", fontsize=28, fontweight="bold")
     plt.tight_layout()
-    plt.xlabel("Regiones Cerebrales", fontsize=18)
-    plt.ylabel("Regiones Cerebrales", fontsize=18)
+    plt.xlabel("Regiones Cerebrales", fontsize=24)
+    plt.ylabel("Regiones Cerebrales", fontsize=24)
 
     # Si signals tiene shape (16, N_tiempo)
     fig, axes = plt.subplots(3, 1, figsize=(12, 6))
@@ -98,16 +105,18 @@ def plot_brain_curves():
     # Histograma de spacings L1
     plt.figure(figsize=(8, 4))
     plt.hist(spacing_L1, bins=35, color="skyblue", edgecolor="black")
-    plt.title("Espaciados entre picos de L1", fontsize=26, fontweight="bold")
-    plt.xlabel("Espaciado (muestras)", fontsize=18)
-    plt.ylabel("Número de picos", fontsize=18)
+    plt.title("Espaciados entre picos de L1", fontsize=28, fontweight="bold")
+    plt.xlabel("Espaciado (muestras)", fontsize=24)
+    plt.ylabel("Número de picos", fontsize=24)
+    plt.tick_params(axis='both', labelsize=22)
 
     plt.figure(figsize=(12, 8))
     plt.plot(signals[8], label="L1", color="red")
-    plt.xlabel("Muestra", fontsize=18)
-    plt.ylabel("Amplitud", fontsize=18)
+    plt.xlabel("Muestra", fontsize=24)
+    plt.ylabel("Amplitud", fontsize=24)
     plt.xlim(500000, 500000+5000)  # Limitar el eje x para ver mejor los primeros pulsos
-    plt.title("Señal de la región L1", fontsize=26, fontweight="bold")
+    plt.title("Señal de la región L1", fontsize=28, fontweight="bold")
+    plt.tick_params(axis='both', labelsize=22)
     plt.tight_layout()
 
 

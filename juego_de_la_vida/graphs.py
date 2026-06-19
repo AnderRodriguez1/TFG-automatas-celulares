@@ -87,13 +87,24 @@ def plot_life_evolution_by_density():
     
     # Ordenar densidades
     sorted_densities = sorted(densities_data.keys())
+
+    # Configuración individual de insets por densidad.
+    # Ajusta width, height, loc, x0, x1, y0 y y1 para personalizar cada zoom.
+    inset_config = {
+        5: {"width": "70%", "height": "35%", "loc": "upper right", "x0": 1000, "x1": 6140, "y0": 0.007, "y1": 0.0095},
+        10: {"width": "70%", "height": "35%", "loc": "upper right", "x0": 2000, "x1": 5000, "y0": 0.026, "y1": 0.0315},
+        30: {"width": "70%", "height": "35%", "loc": "upper right", "x0": 1300, "x1": 8150, "y0": 0.027, "y1": 0.04},
+        50: {"width": "70%", "height": "35%", "loc": "upper right", "x0": 700, "x1": 4450, "y0": 0.025, "y1": 0.05},
+        70: {"width": "70%", "height": "35%", "loc": "upper right", "x0": 0, "x1": 4700, "y0": 0.023, "y1": 0.055},
+        90: {"width": "70%", "height": "35%", "loc": "upper right", "x0": 0, "x1": 10, "y0": -0.005, "y1": 0.005},
+    }
     
     # Crear figura con subplots
     num_plots = len(sorted_densities)
     cols = 3
     rows = (num_plots + cols - 1) // cols
     
-    fig, axes = plt.subplots(rows, cols, figsize=(15, 5 * rows))
+    fig, axes = plt.subplots(rows, cols, figsize=(12, 5 * rows))
     
     # Si hay solo un subplot, axes no es una matriz
     if num_plots == 1:
@@ -147,10 +158,27 @@ def plot_life_evolution_by_density():
                 continue
                 # ax.axvline(x=df['Iteration'].iloc[cutoff_idx], color='red', 
                 #           linestyle='--', linewidth=0.5, alpha=0.5)
+
+        cfg = inset_config.get(density, {"width": "45%", "height": "32%", "loc": "upper right", "x0": 0, "x1": 100, "y0": 0.0, "y1": 0.5})
+        axins = inset_axes(ax, width=cfg["width"], height=cfg["height"], loc=cfg["loc"])
+
+        for df in all_data:
+            live_prop = df['Live Cells'] / (df.iloc[0]['Width'] * df.iloc[0]['Height'])
+            live_prop_trimmed, _ = trim_stable_tail(live_prop)
+            iterations = df['Iteration'].iloc[:len(live_prop_trimmed)]
+            axins.plot(iterations, live_prop_trimmed, linewidth=0.7, alpha=0.8)
+
+        axins.set_xlim(cfg["x0"], cfg["x1"])
+        axins.set_ylim(cfg["y0"], cfg["y1"])
+        axins.tick_params(axis='both', labelsize=12)
+        axins.grid(True, alpha=0.25)
+        mark_inset(ax, axins, loc1=2, loc2=4, fc="none", ec="0.5")
         
-        ax.set_xlabel('Iteración', fontsize=14)
-        ax.set_ylabel('Proporción de células vivas', fontsize=14)
-        ax.set_title(f'Densidad inicial {density}%', fontsize=16)
+        ax.set_xlabel('Iteración', fontsize=16)
+        ax.set_ylabel('Proporción de células vivas', fontsize=16)
+        ax.tick_params(axis='both', labelsize=12)
+        
+        ax.set_title(f'Densidad inicial {density}%', fontsize=18)
         ax.grid(True, alpha=0.3)
         if len(all_data) > 1:
             ax.legend(fontsize=8)
@@ -160,9 +188,8 @@ def plot_life_evolution_by_density():
         axes_flat[idx].set_visible(False)
     
     plt.tight_layout()
-    plt.suptitle('Evolución de la proporción de células vivas con diferentes densidades iniciales',
-                 fontsize=18, fontweight='bold', y=1.00)
-    plt.savefig('plot_evolution.png', dpi=300, bbox_inches='tight')
+    plt.suptitle('Proporción de células vivas con diferentes densidades iniciales',
+                 fontsize=20, fontweight='bold', y=1.00)
     plt.show()
 
 
@@ -185,10 +212,10 @@ def plot_rules_grouped_by_rule():
 
     rules = [(1, 2), (2, 3), (3, 4), (4, 5)]
     titles = {
-        (1, 2): "1 mantienen, 2 reviven",
-        (2, 3): "2 mantienen, 3 reviven (Clásico)",
-        (3, 4): "3 mantienen, 4 reviven",
-        (4, 5): "4 mantienen, 5 reviven",
+        (1, 2): "S12/B2",
+        (2, 3): "S23/B3 (Clásico)",
+        (3, 4): "S34/B4",
+        (4, 5): "S45/B5",
     }
     
     # Configuración individual de insets para cada regla
@@ -204,7 +231,7 @@ def plot_rules_grouped_by_rule():
     density_percents = [int(d * 100) for d in densities]
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
-    fig, axes = plt.subplots(2, 2, figsize=(14, 9))
+    fig, axes = plt.subplots(2, 2, figsize=(12, 9))
     axes = axes.flatten()
 
     for ax, rule in zip(axes, rules):
@@ -234,9 +261,10 @@ def plot_rules_grouped_by_rule():
             ax.set_title(titles.get(rule, f'B{birth}/S{survive}'), fontsize=16)
             continue
 
-        ax.set_title(titles.get(rule, f'B{birth}/S{survive}'), fontsize=16)
-        ax.set_xlabel('Iteración', fontsize=14)
-        ax.set_ylabel('Proporción de células vivas', fontsize=14)
+        ax.set_title(titles.get(rule, f'B{birth}/S{survive}'), fontsize=18)
+        ax.set_xlabel('Iteración', fontsize=16)
+        ax.set_ylabel('Proporción de células vivas', fontsize=16)
+        ax.tick_params(axis='both', labelsize=12)
         ax.grid(True, alpha=0.3)
 
         # Inset: zona tras la caída inicial. Calcular ventana a partir de ref_length
@@ -266,10 +294,11 @@ def plot_rules_grouped_by_rule():
 
         axins.set_xlim(x0, x1)
         axins.set_ylim(cfg["y0"], cfg["y1"])
+        axins.tick_params(axis='both', labelsize=12)
         axins.grid(True, alpha=0.25)
         mark_inset(ax, axins, loc1=2, loc2=4, fc="none", ec="0.5")
 
-        ax.legend(title='Densidad', loc='upper left', fontsize=8)
+        ax.legend(title='Densidad', loc='upper left', fontsize=12)
 
     axes[0].set_xlim(-1, 125)
     axes[1].set_xlim(-50, 8000)
@@ -283,5 +312,5 @@ def plot_rules_grouped_by_rule():
 
 
 if __name__ == "__main__":
-    #plot_rules_grouped_by_rule()
-    plot_life_evolution_by_density()
+    plot_rules_grouped_by_rule()
+    #plot_life_evolution_by_density()

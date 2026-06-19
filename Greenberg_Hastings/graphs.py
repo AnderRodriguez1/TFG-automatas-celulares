@@ -5,6 +5,7 @@ import os
 import re
 from PySide6 import QtWidgets
 from scipy.optimize import curve_fit
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes, mark_inset
 
 def process_data(folder_path=None):
     if folder_path is None:
@@ -157,16 +158,17 @@ def compare_critical_periods():
         print(f"Parámetros de ajuste FSS: {fit_params[0]}")
         plt.plot(np.linspace(np.min(final_sizes) / 100, np.max(final_sizes) / 100, 100), fit_curve, color='green', label='Curva ajustada')
 
-    plt.title('Proporción promedio de células activas en función del período refractario', fontsize=18, fontweight='bold')
-    plt.xlabel('Tamaño del grid (en cientos, escala logarítmica)', fontsize=14)
-    plt.ylabel('Periodo refractario crítico', fontsize=14)
+    plt.title('Periodo refractario crítico en función del tamaño de la red', fontsize=22, fontweight='bold')
+    plt.xlabel('Tamaño de la red (en cientos, escala logarítmica)', fontsize=18)
+    plt.ylabel('Periodo refractario crítico', fontsize=18)
+    plt.tick_params(axis='both', labelsize=14)
     plt.xscale('log')
     custom_ticks = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     plt.xticks(custom_ticks, custom_ticks)
     from matplotlib.ticker import ScalarFormatter
     plt.gca().xaxis.set_major_formatter(ScalarFormatter())
     plt.grid(True)
-    plt.legend(fontsize=12)
+    plt.legend(fontsize=18)
     plt.tight_layout()
     plt.show()
 
@@ -186,7 +188,7 @@ def _parse_density_token(density_token, force_percentage=False):
     return raw_density / 100 if raw_density > 1 else raw_density
 
 def _extract_refractory_curves_by_density(folder_path, density_override=None):
-    """Construye curvas promedio (y sigma) de células activas por periodo refractario para cada densidad."""
+    """Construye curvas por run y densidad de células activas por periodo refractario."""
     data_by_density = {}
 
     for filename in os.listdir(folder_path):
@@ -201,6 +203,8 @@ def _extract_refractory_curves_by_density(folder_path, density_override=None):
             continue
 
         refractory = int(refr_match.group(1))
+        run_match = re.search(r'run(\d+)', filename)
+        run_id = int(run_match.group(1)) if run_match else 0
         if density_override is not None:
             density = density_override
         else:
@@ -232,23 +236,51 @@ def _extract_refractory_curves_by_density(folder_path, density_override=None):
 
             if density not in data_by_density:
                 data_by_density[density] = {}
-            if refractory not in data_by_density[density]:
-                data_by_density[density][refractory] = []
+            if run_id not in data_by_density[density]:
+                data_by_density[density][run_id] = {}
+            if refractory not in data_by_density[density][run_id]:
+                data_by_density[density][run_id][refractory] = []
 
-            data_by_density[density][refractory].append(average_active)
+            data_by_density[density][run_id][refractory].append(average_active)
 
         except Exception as e:
             print(f"Error al procesar el archivo {filename}: {e}")
 
     curves_by_density = {}
-    for density, refr_dict in data_by_density.items():
-        sorted_refr = sorted(refr_dict.keys())
-        mean_averages = [np.mean(refr_dict[refr]) for refr in sorted_refr]
-        std_averages = [np.std(refr_dict[refr]) for refr in sorted_refr]
+    for density, run_dict in data_by_density.items():
+        run_curves = []
+
+        for run_id, refr_dict in run_dict.items():
+            sorted_refr = sorted(refr_dict.keys())
+            mean_averages = [np.mean(refr_dict[refr]) for refr in sorted_refr]
+            run_curves.append({
+                'run': run_id,
+                'refractory': sorted_refr,
+                'mean': mean_averages,
+            })
+
+        if not run_curves:
+            continue
+
+        all_refr = sorted({refr for curve in run_curves for refr in curve['refractory']})
+        density_mean = []
+        density_std = []
+
+        for refr in all_refr:
+            values = []
+            for curve in run_curves:
+                if refr in curve['refractory']:
+                    idx = curve['refractory'].index(refr)
+                    values.append(curve['mean'][idx])
+            if values:
+                density_mean.append(np.mean(values))
+                density_std.append(np.std(values))
+
         curves_by_density[density] = {
-            'refractory': sorted_refr,
-            'mean': mean_averages,
-            'std': std_averages,
+            'runs': run_curves,
+            'refractory': all_refr,
+            'mean': density_mean,
+            'std': density_std,
         }
 
     return curves_by_density
@@ -291,9 +323,21 @@ def plot_individual_data(fit_bool=False, folder_path=None, show_plot=True):
     mean_averages = curves_by_density[density_to_plot]['mean']
     std_averages = curves_by_density[density_to_plot]['std']
 
-    plt.figure(figsize=(11.69, 8.27))
+    # Configuración personalizable del inset
+    inset_config = {
+        "width": "50%",
+        "height": "40%",
+        "loc": "upper right",
+        "x0": 22,
+        "x1": 37,
+        "y0": -0.013,
+        "y1":0.055,
+        "fontsize": 12
+    }
 
-    plt.errorbar(sorted_refr, mean_averages, yerr=std_averages, fmt='o',
+    fig, ax = plt.subplots(figsize=(11.69, 8.27))
+
+    ax.errorbar(sorted_refr, mean_averages, yerr=std_averages, fmt='o',
                  color='blue', ecolor='black', linewidth=2, capsize=5,
                  label='Promedio $\\pm \\sigma$', zorder=10)
     critical_period = None
@@ -325,21 +369,35 @@ def plot_individual_data(fit_bool=False, folder_path=None, show_plot=True):
                 print(f"Exponente crítico (beta): {slope:.4f}")
 
 
-                plt.plot(fit_x, fit_curve, linestyle='--', color='red', linewidth=2, label='Curva ajustada')
+                ax.plot(fit_x, fit_curve, linestyle='--', color='red', linewidth=2, label='Curva ajustada')
         except Exception as e:
             import traceback
             traceback.print_exc()
             print(f"Error al ajustar la curva: {e}")
 
-    plt.title(
+    # Añadir inset configurable
+    axins = inset_axes(ax, width=inset_config["width"], height=inset_config["height"], loc=inset_config["loc"])
+    axins.errorbar(sorted_refr, mean_averages, yerr=std_averages, fmt='o',
+                   color='blue', ecolor='black', linewidth=1.5, capsize=3)
+    if fit_bool and 'fit_x' in locals():
+        axins.plot(fit_x, fit_curve, linestyle='--', color='red', linewidth=1.5)
+    
+    axins.set_xlim(inset_config["x0"], inset_config["x1"])
+    axins.set_ylim(inset_config["y0"], inset_config["y1"])
+    axins.tick_params(axis='both', labelsize=inset_config["fontsize"])
+    axins.grid(True, alpha=0.3)
+    mark_inset(ax, axins, loc1=2, loc2=4, fc="none", ec="0.5")
+
+    ax.set_title(
         f'Proporción promedio de células activas ($\\rho={density_to_plot:.4g}$)',
         fontsize=18,
         fontweight='bold'
     )
-    plt.xlabel('Periodo refractario', fontsize=16)
-    plt.ylabel('Proporción promedio de células activas (últimos 100 pasos)', fontsize=16)
-    plt.grid(True)
-    plt.legend(fontsize=12)
+    ax.set_xlabel('Periodo refractario', fontsize=18)
+    ax.set_ylabel('Proporción de autómatas activos', fontsize=18)
+    ax.tick_params(axis='both', labelsize=14)
+    ax.grid(True)
+    ax.legend(fontsize=16, loc='lower left')
     plt.tight_layout()
     plt.show()
 
@@ -439,14 +497,16 @@ def plot_density_dependence():
             print(f"No se pudieron construir curvas en {folder_name}.")
             continue
 
-        periods = curves_by_density[density]['refractory']
-        means = curves_by_density[density]['mean']
-        critical_period = _get_critical_refractory(periods, means)
+        run_critical_periods = []
+        for run_curve in curves_by_density[density]['runs']:
+            critical_period = _get_critical_refractory(run_curve['refractory'], run_curve['mean'])
+            if critical_period is not None:
+                run_critical_periods.append(critical_period)
 
-        if critical_period is not None:
+        if run_critical_periods:
             if density not in critical_periods_by_density:
                 critical_periods_by_density[density] = []
-            critical_periods_by_density[density].append(critical_period)
+            critical_periods_by_density[density].extend(run_critical_periods)
 
     if not critical_periods_by_density:
         print("No se encontró un período refractario crítico para ninguna densidad.")
@@ -473,7 +533,7 @@ def plot_density_dependence():
             color='blue',
             ecolor='black',
             capsize=4,
-            label='Promedio $\\pm \\sigma$'
+            label='Periodo refractario crítico'
         )
     plt.legend()
     # if has_repetitions:
@@ -492,11 +552,12 @@ def plot_density_dependence():
     #     plt.plot(critical_densities, critical_period_means, marker='o', linestyle='-', color='blue')
     if params_fit is not None:
         plt.plot(fit_x, fit_curve, linestyle='--', color='red', label='Curva ajustada')
-        plt.legend()
+        plt.legend(fontsize=16)
         
-    plt.title('Período refractario crítico en función de la densidad inicial', fontsize=18, fontweight='bold')
-    plt.xlabel('Densidad inicial', fontsize=14)
-    plt.ylabel('Período refractario crítico', fontsize=14)
+    plt.title('Período refractario crítico en función de la densidad inicial', fontsize=24, fontweight='bold')
+    plt.xlabel('Densidad inicial', fontsize=20)
+    plt.ylabel('Período refractario crítico', fontsize=20)
+    plt.tick_params(axis='both', labelsize=14)
     plt.grid(True)
     plt.tight_layout()
     plt.show()
@@ -521,6 +582,7 @@ def plot_data_collapse():
         return
 
     plt.figure(figsize=(11.69, 8.27))
+    fit_rows = []
 
     for density, folder_path, folder_name in sorted(relevant_folders, key=lambda x: x[0]):
         curves_by_density = _extract_refractory_curves_by_density(folder_path, density_override=density)
@@ -553,8 +615,16 @@ def plot_data_collapse():
             Rc_opt   = fit_params[2]
             beta_opt = fit_params[3]
 
+            fit_rows.append({
+                'density': density,
+                'A': A_opt,
+                'tau': tau_opt,
+                'Rc': Rc_opt,
+                'beta': beta_opt,
+            })
+
             # eje X: va de ~1 (R≈0) hasta 0 (R→Rc)
-            X = 1.0 - clean_refr / Rc_opt
+            X = (1.0 - clean_refr / Rc_opt) ** beta_opt
 
             # eje Y: (1 - R/Rc)^beta — vale 1 en X=1 y 0 en X=0
             Y = (clean_avg * (clean_refr ** tau_opt)) / (A_opt * (Rc_opt ** beta_opt))
@@ -564,23 +634,29 @@ def plot_data_collapse():
             X, Y  = X[order], Y[order]
 
             plt.plot(X, Y, marker='o', linestyle='-', alpha=0.8,
-                     label=f'Densidad {density:.2f} ('f'$R_c$={Rc_opt:.1f}, $\\beta$={beta_opt:.2f})')
+                     label=f'$\\rho =$ {density:.2f} ('f'$R_c$={Rc_opt:.1f}, $\\beta$={beta_opt:.2f}, $\\tau$={tau_opt:.2f})')
 
         except Exception as e:
             print(f"Fallo al ajustar la densidad {density}: {e}")
             continue
 
-    plt.title('Colapso de Datos', fontsize=18, fontweight='bold')
-    plt.xlabel('Período Refractario Normalizado ($1 - R/R_c$)', fontsize=14)
-    plt.ylabel('$\\rho \\cdot R^{\\tau}\\,/\\,(A \\cdot R_c^{\\beta})$ (Amplitud Reescalada)', fontsize=14)
+    if fit_rows:
+        fit_table = pd.DataFrame(fit_rows)
+        fit_table = fit_table.sort_values('density').reset_index(drop=True)
+        print("\nTabla de parámetros del ajuste por densidad:")
+        print(fit_table.to_string(index=False, float_format=lambda x: f"{x:.6g}"))
 
-    
+    plt.title('Colapso de Datos', fontsize=22, fontweight='bold')
+    plt.xlabel('Período Refractario Normalizado ($(1 - R/R_c)^\\beta$)', fontsize=18)
+    plt.ylabel('$\\rho \\cdot R^{\\tau}\\,/\\,(A \\cdot R_c^{\\beta})$ (Amplitud Reescalada)', fontsize=18)
+
+    plt.tick_params(axis='both', labelsize=14)
     plt.xlim(1, 0)          # X decrece hacia la derecha
-    plt.ylim(0, 1.05)       # Y entre 0 y 1
+    plt.ylim(0, 1.1)       # Y entre 0 y 1
     
 
     plt.grid(True)
-    plt.legend(fontsize=10)
+    plt.legend(fontsize=15, loc='lower left')
     plt.tight_layout()
     plt.show()
 
@@ -599,9 +675,9 @@ def main():
     #plot_data_average()
     #plot_data_replicate()
     #compare_critical_periods()
-    plot_individual_data(fit_bool=True)
+    #plot_individual_data(fit_bool=True)
     #plot_density_dependence()
-    #plot_data_collapse()
+    plot_data_collapse()
 
 if __name__=="__main__":
     main()

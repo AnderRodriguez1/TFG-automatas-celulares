@@ -67,7 +67,7 @@ def generate_3d_plot():
     fig = plt.figure(figsize=(11.69, 8.27))
     ax = fig.add_subplot(111, projection='3d')
 
-    X, Y = np.meshgrid(birth_range, survive_range)
+    X, Y = np.meshgrid(birth_range + 1, survive_range + 1)
     Z = entropy_matrix
 
     surf = ax.plot_surface(X, Y, Z, cmap='viridis')
@@ -79,8 +79,8 @@ def generate_3d_plot():
 
     fig.colorbar(surf, shrink=0.5, aspect=10)
 
-    ax.scatter([3], [2], [entropy_matrix[2, 3]+0.01], color='r', s=50, label='Regla Clásica (B3/S2)')
-    ax.plot([3, 3], [2, 2], [entropy_matrix[2, 3], 1], color='red', linewidth=1, zorder=1000)
+    ax.scatter([4], [3], [entropy_matrix[2, 3]+0.01], color='r', s=50, label='Regla Clásica (B3/S2)')
+    ax.plot([4, 4], [3, 3], [entropy_matrix[2, 3], 1], color='red', linewidth=1, zorder=1000)
 
     plt.legend()
     plt.show()

@@ -119,6 +119,8 @@ def plot_combined_analysis():
     if df.empty:
         return
 
+    tick_labelsize = 16
+
     x_data = df['sigma'].to_numpy(dtype=float)
     y_strict = df['strict_rate'].to_numpy(dtype=float)
     y_ignit = df['ignition_rate'].to_numpy(dtype=float)
@@ -153,12 +155,13 @@ def plot_combined_analysis():
         plt.plot(x_fit, fit_ignit, '--', color='forestgreen', linewidth=2.5, 
                  label=r'Ajuste Arrhenius-Kramers')
 
-    plt.title('Aislamiento de la componente de disparo', fontsize=24, fontweight="bold")
-    plt.xlabel(r'Amplitud del Ruido escalada ($\sigma \cdot \sqrt{\Delta t}$)', fontsize=18)
+    plt.title('Componente de disparo', fontsize=30, fontweight="bold")
+    plt.xlabel(r'Amplitud del Ruido escalada ($\sigma \cdot \sqrt{\Delta t}$)', fontsize=24)
     plt.xlim(0, 0.035)
-    plt.ylabel('Probabilidad de Éxito', fontsize=18)
+    plt.ylabel('Probabilidad de Éxito', fontsize=24)
+    plt.tick_params(axis='both', labelsize=tick_labelsize)
     plt.grid(True)
-    plt.legend()
+    plt.legend(fontsize=16)
     plt.tight_layout()
 
     # Ajuste completo
@@ -170,12 +173,13 @@ def plot_combined_analysis():
         plt.plot(x_fit, fit_strict, '-', color='darkorange', linewidth=2.5, 
                  label=r'Ajuste')
 
-    plt.title('Resonancia Estocástica', fontsize=24, fontweight="bold")
-    plt.xlabel(r'Amplitud del Ruido escalada ($\sigma \cdot \sqrt{\Delta t}$)', fontsize=18)
+    plt.title('Resonancia Estocástica', fontsize=30, fontweight="bold")
+    plt.xlabel(r'Amplitud del Ruido escalada ($\sigma \cdot \sqrt{\Delta t}$)', fontsize=24)
     plt.xlim(0, 0.035)
-    plt.ylabel('Probabilidad de Éxito', fontsize=18)
+    plt.ylabel('Probabilidad de Éxito', fontsize=24)
+    plt.tick_params(axis='both', labelsize=tick_labelsize)
     plt.grid(True)
-    plt.legend()
+    plt.legend(fontsize=16)
     plt.tight_layout()
 
     
