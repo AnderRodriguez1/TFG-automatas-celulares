@@ -11,6 +11,8 @@ uniform vec2 u_grid_size; // Tamaño del grid
 
 const float epsilon = 1e-6; 
 
+const float period = 0.25;
+
 void main()
 {
     // Calcular las coordenadas de muestreo teniendo en cuenta el zoom y el offset
@@ -22,6 +24,15 @@ void main()
         return;
     }
 
+    // Calcular las coordenadas dentro de la celda para dibujar bordes
+    vec2 grid_coord_float = sample_coord * u_grid_size;
+    vec2 inside_cell_coord = fract(grid_coord_float);
+
+    // Estimar el tamaño de un pixel en coordenadas de celda
+    float px_x = fwidth(grid_coord_float.x);
+    float px_y = fwidth(grid_coord_float.y);
+    float pixel_size_in_cells = max(px_x, px_y);
+
     vec4 current_state = texture(u_state_texture, sample_coord); // Leer el estado actual de la celda
     float v = current_state.r; // Voltaje de la celda (canal rojo)
     float is_blocked = current_state.b; // Bloqueo de la celda (canal azul)
@@ -32,28 +43,26 @@ void main()
         if (v > 1.0 - epsilon){
             final_color = vec3(0.92, 0.0, 1.0); // Magenta para celulas activas bloqueadas (reflectores)
         }else{
+
+            float diagonal = -grid_coord_float.x + grid_coord_float.y;
+            float period_mod = mod(diagonal, period);
+            float width = fwidth(diagonal);
+            float raw_pattern = smoothstep(period * 0.5 - width, period * 0.5 + width, period_mod); // Patrón de rayado diagonal
             // Si la celula esta inactiva, se bloquea
-            final_color = vec3(0.4, 0.4, 0.4); // Gris para células bloqueadas
+            final_color = mix(vec3(0.0), vec3(1.0), raw_pattern); // Rayado para celdas bloqueadas (por implementar aun)
         }
     }else if (v > 1.0 - epsilon){
         // Celula activa
         final_color = vec3(1.0, 1.0, 1.0);
     }else if (v > epsilon){
         // Celula refractaria
-        final_color = vec3(v, 0, 0);
+        final_color = vec3(v * 0.7, v * 0.7, v * 0.7); // Escala de grises para celulas refractarias
     }else{
         // Celula inactiva
         final_color = vec3(0.0, 0.0, 0.0);
     }
     
-    // Calcular las coordenadas dentro de la celda para dibujar bordes
-    vec2 grid_coord_float = sample_coord * u_grid_size;
-    vec2 inside_cell_coord = fract(grid_coord_float);
-
-    // Estimar el tamaño de un pixel en coordenadas de celda
-    float px_x = fwidth(grid_coord_float.x);
-    float px_y = fwidth(grid_coord_float.y);
-    float pixel_size_in_cells = max(px_x, px_y);
+    
 
     // Calcular el numero de pixeles que cubre una celda, evitar division por cero
     float cell_pixels = 1.0 / max(pixel_size_in_cells, 1e-6);

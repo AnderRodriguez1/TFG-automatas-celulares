@@ -150,17 +150,17 @@ def compare_critical_periods():
             final_averages_std.append(std_val)
 
         plt.errorbar(np.array(final_sizes) / 100, final_averages, yerr=final_averages_std, fmt='o', 
-        color='red', ecolor='black', elinewidth=1.5, capsize=4, label='Promedio $\pm \sigma$')
+        color='red', ecolor='black', elinewidth=1.5, capsize=4, label='Data (mean $\pm \sigma$)')
 
         fit_params = curve_fit(fss_function, np.array(final_sizes) / 100, final_averages, maxfev=10000)
         fit_curve = fss_function(np.linspace(np.min(final_sizes) / 100, np.max(final_sizes) / 100, 100), *fit_params[0])
 
         print(f"Parámetros de ajuste FSS: {fit_params[0]}")
-        plt.plot(np.linspace(np.min(final_sizes) / 100, np.max(final_sizes) / 100, 100), fit_curve, color='green', label='Curva ajustada')
+        plt.plot(np.linspace(np.min(final_sizes) / 100, np.max(final_sizes) / 100, 100), fit_curve, color='green', label='Curve fit')
 
-    plt.title('Periodo refractario crítico en función del tamaño de la red', fontsize=22, fontweight='bold')
-    plt.xlabel('Tamaño de la red (en cientos, escala logarítmica)', fontsize=18)
-    plt.ylabel('Periodo refractario crítico', fontsize=18)
+    plt.title('Critical refractory period as a function of grid size', fontsize=22, fontweight='bold')
+    plt.xlabel('Grid size (in hundreds, logarithmic scale)', fontsize=18)
+    plt.ylabel('Critical refractory period', fontsize=18)
     plt.tick_params(axis='both', labelsize=14)
     plt.xscale('log')
     custom_ticks = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
@@ -168,7 +168,7 @@ def compare_critical_periods():
     from matplotlib.ticker import ScalarFormatter
     plt.gca().xaxis.set_major_formatter(ScalarFormatter())
     plt.grid(True)
-    plt.legend(fontsize=18)
+    plt.legend(fontsize=20)
     plt.tight_layout()
     plt.show()
 
@@ -339,7 +339,7 @@ def plot_individual_data(fit_bool=False, folder_path=None, show_plot=True):
 
     ax.errorbar(sorted_refr, mean_averages, yerr=std_averages, fmt='o',
                  color='blue', ecolor='black', linewidth=2, capsize=5,
-                 label='Promedio $\\pm \\sigma$', zorder=10)
+                 label='Data (mean $\\pm \\sigma$)', zorder=10)
     critical_period = None
     if fit_bool:
         try:
@@ -350,9 +350,9 @@ def plot_individual_data(fit_bool=False, folder_path=None, show_plot=True):
                 clean_refr = np.array(clean_refr)
                 clean_avg = np.array(clean_avg)
                 p_c_guess = clean_refr[-1] + 1  # Just past the last nonzero point
-                p_0 = [0.5, 0.5, p_c_guess, 0.5]
-                bounds_lower = [0.0001, 0.0001, clean_refr[-1], 0.0001]
-                bounds_upper = [10, 5, 250, 5]
+                p_0 = [0.5, 0.5, 0, p_c_guess, 0.5]
+                bounds_lower = [0.0001, 0.0001, -1, clean_refr[-1], 0.0001]
+                bounds_upper = [10, 5, 10, 250, 5]
                 fit_params = curve_fit(curve_fit_function, clean_refr, clean_avg,
                                         p0=p_0, bounds=(bounds_lower, bounds_upper), maxfev=100000)
                 fit_x = np.linspace(min(sorted_refr), max(sorted_refr), 200)
@@ -360,7 +360,7 @@ def plot_individual_data(fit_bool=False, folder_path=None, show_plot=True):
                 print(f"Parámetros de ajuste: {fit_params[0]}")
 
                 # El ajuste log-log con beta sale medio pocho por la variacion, igual con muchas mas muestras se podría mejorar
-                critical_period = fit_params[0][2]
+                critical_period = fit_params[0][3]
                 log_mask = (clean_refr > critical_period - 15) & (clean_refr < critical_period - 1)
                 log_density = np.log(clean_avg)[log_mask]
                 log_refr = np.log(critical_period - np.array(clean_refr)[log_mask])
@@ -369,7 +369,7 @@ def plot_individual_data(fit_bool=False, folder_path=None, show_plot=True):
                 print(f"Exponente crítico (beta): {slope:.4f}")
 
 
-                ax.plot(fit_x, fit_curve, linestyle='--', color='red', linewidth=2, label='Curva ajustada')
+                ax.plot(fit_x, fit_curve, linestyle='--', color='red', linewidth=2, label='Curve fit')
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -389,15 +389,15 @@ def plot_individual_data(fit_bool=False, folder_path=None, show_plot=True):
     mark_inset(ax, axins, loc1=2, loc2=4, fc="none", ec="0.5")
 
     ax.set_title(
-        f'Proporción promedio de células activas ($\\rho={density_to_plot:.4g}$)',
+        f'Mean proportion of active automata ($\\rho={density_to_plot:.4g}$)',
         fontsize=18,
         fontweight='bold'
     )
-    ax.set_xlabel('Periodo refractario', fontsize=18)
-    ax.set_ylabel('Proporción de autómatas activos', fontsize=18)
+    ax.set_xlabel('Refractory period', fontsize=18)
+    ax.set_ylabel('Proportion of active automata', fontsize=18)
     ax.tick_params(axis='both', labelsize=14)
     ax.grid(True)
-    ax.legend(fontsize=16, loc='lower left')
+    ax.legend(fontsize=20, loc='center', bbox_to_anchor=(20, 0.48), bbox_transform=ax.transData)
     plt.tight_layout()
     plt.show()
 
@@ -533,9 +533,9 @@ def plot_density_dependence():
             color='blue',
             ecolor='black',
             capsize=4,
-            label='Periodo refractario crítico'
+            label='Data (mean $\\pm \\sigma$)'
         )
-    plt.legend()
+    plt.legend(fontsize=20)
     # if has_repetitions:
     #     plt.errorbar(
     #         critical_densities,
@@ -551,12 +551,12 @@ def plot_density_dependence():
     # else:
     #     plt.plot(critical_densities, critical_period_means, marker='o', linestyle='-', color='blue')
     if params_fit is not None:
-        plt.plot(fit_x, fit_curve, linestyle='--', color='red', label='Curva ajustada')
-        plt.legend(fontsize=16)
+        plt.plot(fit_x, fit_curve, linestyle='--', color='red', label='Curve fit')
+        plt.legend(fontsize=20)
         
-    plt.title('Período refractario crítico en función de la densidad inicial', fontsize=24, fontweight='bold')
-    plt.xlabel('Densidad inicial', fontsize=20)
-    plt.ylabel('Período refractario crítico', fontsize=20)
+    plt.title('Critical refractory period as a function of initial density', fontsize=24, fontweight='bold')
+    plt.xlabel('Initial density ($\\rho$)', fontsize=20)
+    plt.ylabel('Critical refractory period', fontsize=20)
     plt.tick_params(axis='both', labelsize=14)
     plt.grid(True)
     plt.tight_layout()
@@ -646,9 +646,9 @@ def plot_data_collapse():
         print("\nTabla de parámetros del ajuste por densidad:")
         print(fit_table.to_string(index=False, float_format=lambda x: f"{x:.6g}"))
 
-    plt.title('Colapso de Datos', fontsize=22, fontweight='bold')
-    plt.xlabel('Período Refractario Normalizado ($(1 - R/R_c)^\\beta$)', fontsize=18)
-    plt.ylabel('$\\rho \\cdot R^{\\tau}\\,/\\,(A \\cdot R_c^{\\beta})$ (Amplitud Reescalada)', fontsize=18)
+    plt.title('Data Collapse', fontsize=22, fontweight='bold')
+    plt.xlabel('Normalized refractory period ($(1 - R/R_c)^\\beta$)', fontsize=18)
+    plt.ylabel('Rescaled proportion of active automata ($\\rho \\cdot R^{\\tau}\\,/\\,(A \\cdot R_c^{\\beta})$)', fontsize=18)
 
     plt.tick_params(axis='both', labelsize=14)
     plt.xlim(1, 0)          # X decrece hacia la derecha
@@ -660,9 +660,9 @@ def plot_data_collapse():
     plt.tight_layout()
     plt.show()
 
-def curve_fit_function(x, a, b, p_c, beta):
+def curve_fit_function(x, a, b, c, p_c, beta):
     base = np.maximum(p_c - x, 0)
-    return a * (x**(-b)) * (base)**beta
+    return a * (x**(-b)) * np.exp(-c * x) * (base)**beta
 
 def fss_function(x, a, b, c):
     return a - b * (x**(-c))
@@ -674,10 +674,10 @@ def main():
     app = QtWidgets.QApplication([])
     #plot_data_average()
     #plot_data_replicate()
-    #compare_critical_periods()
+    compare_critical_periods()
     #plot_individual_data(fit_bool=True)
-    #plot_density_dependence()
-    plot_data_collapse()
+    plot_density_dependence()
+    #plot_data_collapse()
 
 if __name__=="__main__":
     main()
