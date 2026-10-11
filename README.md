@@ -7,17 +7,9 @@ Commercial use is prohibited without explicit written permission.
 See the LICENSE file for details.
 
 
-Repositorio del TFG sobre automatas celulares, hecho por Ander Rodríguez Muñoz
+Repository used for cellular automata simulations, made by Ander Rodríguez Muñoz
 
--Para poder correr el codigo hace falta activar el entorno
+- In order to run the simulation the .env must be activated
 
--Para ejecutar cualquier version de los codigos basta con ejecutar el main_gpu_modern
-
--Hay 3 simulaciones diferentes:
-
-    * Juego de la vida 
-    
-    * Greenberg-Hastings (autómatas celulares con lógica discreta)
-
-    * Fitzhugh-Nagumo (autómatas celulares que siguen un modelo de racción-difusión)
+- The file to run any of the three simulations (Game of Life, Greenberg-Hastings and FitzHugh-Nagumo) is "main_gpu_modern.py" in the three different folders
 
