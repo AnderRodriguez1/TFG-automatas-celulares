@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Summarize Greenberg-Hastings simulation CSV files without loading them into memory.
 
 The script recursively scans files named like
@@ -12,6 +11,7 @@ row whose Step value is 1999.
 """
 
 import argparse
+from ast import arg
 import csv
 import math
 import re
@@ -19,9 +19,11 @@ import sys
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
+from PySide6 import QtWidgets
+from tqdm import tqdm
 
-
-SCRIPT_VERSION = "1.0.0"
+_HERE = Path(__file__).resolve().parent
+SCRIPT_VERSION = "1.1.0"
 REQUIRED_COLUMNS = (
     "Step",
     "Active_cells",
@@ -36,6 +38,24 @@ FILENAME_RE = re.compile(
     re.IGNORECASE,
 )
 
+
+def select_data_folder():
+    """
+    Auxiliary function to select the folder where the .csv are located manually.
+    Only used if no console arguments are input.
+    """
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        app = QtWidgets.QApplication(sys.argv)
+
+    print("Please select the root folder that contains the simulation folders (e. g. the folder that contains 'CSVs_GH_densidad_15'): ")
+    folder_path = QtWidgets.QFileDialog.getExistingDirectory(
+        None,
+        "Select simulation folder",
+        ""
+    )
+
+    return Path(folder_path) if folder_path else None
 
 def parse_density(token):
     """Interpret integer filename tokens as percentages (15 -> 0.15)."""
@@ -233,7 +253,12 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(
         description="Create a compact audit summary of Greenberg-Hastings CSV simulations."
     )
-    parser.add_argument("data_root", type=Path, help="Root folder containing the CSV files")
+    parser.add_argument(
+        "data_root",
+        type=Path,
+        nargs="?",
+        default=None,
+        help="Root folder containing the CSV files")
     parser.add_argument(
         "--output",
         type=Path,
@@ -258,7 +283,18 @@ def parse_args(argv=None):
 
 def main(argv=None):
     args = parse_args(argv)
-    root = args.data_root.expanduser().resolve()
+
+    # Make console folder path optional
+    if args.data_root is not None:
+        root = args.data_root.expanduser().resolve()
+    else:
+
+        root = select_data_folder()
+        if root is None:
+            print("No folder was selected. Operation cancelled", file=sys.stderr)
+            return 1
+        root = root.resolve()
+
     if not root.is_dir():
         print(f"Error: data folder does not exist: {root}", file=sys.stderr)
         return 2
@@ -267,11 +303,15 @@ def main(argv=None):
         return 2
 
     checkpoints = sorted(set(value for value in args.checkpoints if value > 0))
-    output = (
-        args.output.expanduser().resolve()
-        if args.output is not None
-        else root / "gh_simulation_summary.csv"
-    )
+    script_dir = Path(__file__).resolve().parent
+
+    if args.output is not None:
+        # If the output path is absolute, use it, if not, save in the scripts directory, not the working one
+        output = args.output if args.output.is_absolute() else script_dir / args.output
+        output = output.expanduser().resolve()
+    else:
+        output = script_dir / "gh_simulation_summary.csv"
+
     errors_output = output.with_name(output.stem + "_errors.csv")
 
     excluded = {output.resolve(), errors_output.resolve()}
@@ -290,7 +330,7 @@ def main(argv=None):
     with output.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=fieldnames)
         writer.writeheader()
-        for index, path in enumerate(files, start=1):
+        for path in tqdm(files, desc="Scanning files", unit="file"):
             try:
                 writer.writerow(
                     summarize_file(path, root, args.late_window, checkpoints)
@@ -303,8 +343,6 @@ def main(argv=None):
                         "error": f"{type(exc).__name__}: {exc}",
                     }
                 )
-            if index % 100 == 0 or index == len(files):
-                print(f"Scanned {index}/{len(files)} files...", flush=True)
 
     if error_rows:
         with errors_output.open("w", newline="", encoding="utf-8") as stream:

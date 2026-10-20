@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Generate final figures for the article:
 - Figure 1: Full-range activity with descriptive phenomenological fit (M0)
@@ -21,8 +20,9 @@ from scipy.optimize import curve_fit
 # ============================================================
 # CONFIGURATION
 # ============================================================
-SUMMARY_FILE = Path("gh_simulation_summary.csv")
-OUTPUT_DIR = Path("figures_final")
+_HERE = Path(__file__).resolve().parent
+SUMMARY_FILE = _HERE / "gh_simulation_summary.csv"
+OUTPUT_DIR = _HERE / "figures_final"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 # Target parameters

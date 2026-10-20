@@ -6,13 +6,13 @@ This README documents the additional analysis scripts. The repository's existing
 
 ## 1. Requirements
 
-Use a Python 3 environment with NumPy, SciPy and Matplotlib:
+Use a Python 3 environment with NumPy, SciPy, Matplotlib and PySide6. Alternatively, activate the environment.yml for easier use:
 
 ```bash
-python -m pip install numpy scipy matplotlib
+python -m pip install numpy scipy matplotlib PySide6
 ```
 
-`gh_summarize_csv.py` uses only the Python standard library. The other scripts require NumPy and Matplotlib; the final-figure and bootstrap scripts also require SciPy. Record the Python and package versions used for the release, since numerical optimization can depend on the software environment. The commands above install dependencies but do not specify a historically validated environment.
+`gh_summarize_csv.py` uses the Python standard library and PySide6. The other scripts additionally require NumPy and Matplotlib; the final-figure and bootstrap scripts also require SciPy. Record the Python and package versions used for the release, since numerical optimization can depend on the software environment. The commands above install dependencies but do not specify a historically validated environment.
 
 ## 2. Files and inputs
 

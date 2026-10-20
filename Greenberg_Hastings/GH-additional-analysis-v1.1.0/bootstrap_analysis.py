@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Bootstrap and profile analysis for model comparison (M0 vs M1).
 """
@@ -14,8 +13,9 @@ from scipy.optimize import curve_fit
 # ============================================================
 # CONFIGURATION
 # ============================================================
-SUMMARY_FILE = Path("gh_simulation_summary.csv")
-OUTPUT_DIR = Path("bootstrap_analysis")
+_HERE = Path(__file__).resolve().parent
+SUMMARY_FILE = _HERE / "gh_simulation_summary.csv"
+OUTPUT_DIR = _HERE / "figures_final"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 TARGET_L = 500

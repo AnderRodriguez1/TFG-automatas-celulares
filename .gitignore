@@ -25,3 +25,7 @@ Thumbs.db
 
 *temp*
 NPZs_brain_test/
+*.csv
+*.png
+*.pdf
+*.jpg

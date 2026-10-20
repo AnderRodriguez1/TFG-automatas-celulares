@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Reconstruct activity curve for L=500, rho0=0.15 from the original campaign.
 Outputs:
@@ -19,7 +18,9 @@ import numpy as np
 # ============================================================
 # CONFIGURATION
 # ============================================================
-SUMMARY_FILE = Path("gh_simulation_summary.csv")
+_HERE = Path(__file__).resolve().parent
+SUMMARY_FILE = _HERE / "gh_simulation_summary.csv"
+OUTPUT_DIR = _HERE / "figures_final"
 #OUTPUT_PREFIX = "L500_rho015"
 OUTPUT_PREFIX = "L500_rho015_multiple"
 
@@ -185,7 +186,7 @@ for R in R_values:
 # ============================================================
 # SAVE CSVs
 # ============================================================
-ACTIVITY_CSV = Path(f"{OUTPUT_PREFIX}_activity_curve.csv")
+ACTIVITY_CSV = _HERE / f"{OUTPUT_PREFIX}_activity_curve.csv"
 with open(ACTIVITY_CSV, "w", newline="", encoding="utf-8") as f:
     fieldnames = ["R", "N_real", "mean_activity", "population_sigma", "sample_sd", "sem"]
     writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -194,7 +195,7 @@ with open(ACTIVITY_CSV, "w", newline="", encoding="utf-8") as f:
         writer.writerow({k: row[k] for k in fieldnames})
 print(f"Activity curve saved to: {ACTIVITY_CSV}")
 
-SURV_CSV = Path(f"{OUTPUT_PREFIX}_survival_decomposition.csv")
+SURV_CSV = _HERE / f"{OUTPUT_PREFIX}_survival_decomposition.csv"
 with open(SURV_CSV, "w", newline="", encoding="utf-8") as f:
     fieldnames = ["R", "N_real", "N_surv", "survival_probability",
                   "survival_CI_low", "survival_CI_high",
