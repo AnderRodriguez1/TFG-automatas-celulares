@@ -6,13 +6,13 @@ This README documents the additional analysis scripts. The repository's existing
 
 ## 1. Requirements
 
-Use a Python 3 environment with NumPy, SciPy, Matplotlib and PySide6. Alternatively, activate the environment.yml for easier use:
+Use a Python 3 environment with NumPy, SciPy, Matplotlib, PySide6 and tqdm. Alternatively, activate the environment.yml for easier use:
 
 ```bash
-python -m pip install numpy scipy matplotlib PySide6
+python -m pip install numpy scipy matplotlib PySide6 tqdm
 ```
 
-`gh_summarize_csv.py` uses the Python standard library and PySide6. The other scripts additionally require NumPy and Matplotlib; the final-figure and bootstrap scripts also require SciPy. Record the Python and package versions used for the release, since numerical optimization can depend on the software environment. The commands above install dependencies but do not specify a historically validated environment.
+`gh_summarize_csv.py` uses the Python standard library PySide6 and tqdm. The other scripts additionally require NumPy and Matplotlib; the final-figure and bootstrap scripts also require SciPy. Record the Python and package versions used for the release, since numerical optimization can depend on the software environment. The commands above install dependencies but do not specify a historically validated environment.
 
 ## 2. Files and inputs
 
@@ -45,7 +45,15 @@ For the commands below, assume the scripts are in an analysis directory and its 
 
 ## 3. Generate the simulation summary
 
-Run all commands from the directory containing the analysis scripts:
+Run the script directly to select the simulation data folder via the graphical dialog.
+
+```bash
+python gh_summarize_csv.py
+```
+
+A folder dialog will open. Select the parent directory that contains the campaign folder (e. g. the folder containing `CSVs_GH_densidad_15`). The summary will automatically be saved to `gh_simulation_summary.csv` in the script's directory.
+
+Alternatively, you can run it via command-line interface passing the path and custom options:
 
 ```bash
 python gh_summarize_csv.py "../data" --output gh_simulation_summary.csv --late-window 100 --checkpoints 1000 2000
