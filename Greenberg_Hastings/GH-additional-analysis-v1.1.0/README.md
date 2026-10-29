@@ -12,7 +12,7 @@ Use a Python 3 environment with NumPy, SciPy, Matplotlib, PySide6 and tqdm. Alte
 python -m pip install numpy scipy matplotlib PySide6 tqdm
 ```
 
-`gh_summarize_csv.py` uses the Python standard library PySide6 and tqdm. The other scripts additionally require NumPy and Matplotlib; the final-figure and bootstrap scripts also require SciPy. Record the Python and package versions used for the release, since numerical optimization can depend on the software environment. The commands above install dependencies but do not specify a historically validated environment.
+`gh_summarize_csv.py` uses the Python standard library, PySide6 and tqdm. The other scripts additionally require NumPy and Matplotlib; the final-figure and bootstrap scripts also require SciPy. Record the Python and package versions used for the release, since numerical optimization can depend on the software environment. The commands above install dependencies but do not specify a historically validated environment.
 
 ## 2. Files and inputs
 
